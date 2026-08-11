@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MJ Studio Game Portal</title>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background-color: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(8px);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid #334155;
+    }
+
+    .logo {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-publicar {
+      background-color: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.6rem 1.2rem;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .btn-publicar:hover {
+      background-color: var(--accent-hover);
+      transform: translateY(-1px);
+    }
+
+    main {
+      max-width: 1200px;
+      width: 100%;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      flex: 1;
+    }
+
+    .section-title {
+      font-size: 1.8rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .games-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .game-card {
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #334155;
+      transition: transform 0.2s, box-shadow 0.2s;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .game-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .game-img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      background-color: #334155;
+    }
+
+    .game-info {
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .game-title {
+      font-size: 1.2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .game-desc {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      line-height: 1.4;
+      margin-bottom: 1rem;
+      flex: 1;
+    }
+
+    .game-link {
+      display: inline-block;
+      text-align: center;
+      background-color: var(--accent);
+      color: var(--text);
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
+
+    .game-link:hover {
+      background-color: var(--accent-hover);
+    }
+
+    /* Modais */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background-color: var(--card-bg);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 2rem;
+      width: 90%;
+      max-width: 500px;
+      position: relative;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal h2 {
+      margin-bottom: 1rem;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    .form-group {
+      margin-bottom: 1.2rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .form-group input, .form-group textarea {
+      width: 100%;
+      padding: 0.7rem;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      background-color: var(--bg-color);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+
+    .form-group input:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 0.8rem;
+      background-color: var(--accent);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+
+    .btn-submit:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .error-msg {
+      color: #ef4444;
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+      display: none;
+    }
+
+    .status-msg {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: #38bdf8;
+      text-align: center;
+    }
+
+    footer {
+      text-align: center;
+      padding: 1.5rem;
+      color: var(--text-muted);
+      border-top: 1px solid #334155;
+      margin-top: auto;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">🎮 MJ Studio Game Portal</div>
+    <button class="btn-publicar" id="btnAuth">Publicar</button>
+  </header>
+
+  <main>
+    <h1 class="section-title">🚀 Projetos Publicados</h1>
+    <div class="games-grid" id="gamesGrid">
+      <!-- Os jogos cadastrados aparecerão aqui -->
+    </div>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 MJ Studio Game Portal. Todos os direitos reservados.</p>
+  </footer>
+
+  <!-- Modal 1: Autenticação de Senha -->
+  <div class="modal-overlay" id="modalAuth">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModals()">&times;</button>
+      <h2>Área Restrita</h2>
+      <form id="formPass">
+        <div class="form-group">
+          <label for="password">Digite a senha de administrador:</label>
+          <input type="password" id="password" placeholder="Senha..." required>
+          <div class="error-msg" id="errorPass">Senha incorreta. Tente novamente!</div>
+        </div>
+        <button type="submit" class="btn-submit">Acessar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 2: Formulário de Upload do Jogo -->
+  <div class="modal-overlay" id="modalPost">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModals()">&times;</button>
+      <h2>Publicar Jogo no GitHub</h2>
+      <form id="formGame">
+        <div class="form-group">
+          <label for="githubToken">GitHub Token (PAT)</label>
+          <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxx" required>
+        </div>
+        <div class="form-group">
+          <label for="gameTitle">Nome do Jogo</label>
+          <input type="text" id="gameTitle" placeholder="Ex: Meu Jogo 2D" required>
+        </div>
+        <div class="form-group">
+          <label for="gameDesc">Descrição</label>
+          <textarea id="gameDesc" rows="2" placeholder="Resumo do projeto..." required></textarea>
+        </div>
+        <div class="form-group">
+          <label for="gameCover">Imagem de Capa (Opcional)</label>
+          <input type="file" id="gameCover" accept="image/*">
+        </div>
+        <div class="form-group">
+          <label for="gameFile">Arquivo do Jogo (.exe, .zip ou .html)</label>
+          <input type="file" id="gameFile" required>
+        </div>
+        <button type="submit" class="btn-submit" id="btnUpload">Upar para o GitHub</button>
+        <div class="status-msg" id="statusMsg"></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // CONFIGURAÇÃO DO SEU GITHUB
+    const GITHUB_USER = "Matt73us";
+    const GITHUB_REPO = "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";
+
+    const SECRET_PASS = "o mj é o melhor";
+
+    const btnAuth = document.getElementById('btnAuth');
+    const modalAuth = document.getElementById('modalAuth');
+    const modalPost = document.getElementById('modalPost');
+    const formPass = document.getElementById('formPass');
+    const formGame = document.getElementById('formGame');
+    const errorPass = document.getElementById('errorPass');
+    const gamesGrid = document.getElementById('gamesGrid');
+    const statusMsg = document.getElementById('statusMsg');
+    const btnUpload = document.getElementById('btnUpload');
+
+    btnAuth.addEventListener('click', () => modalAuth.classList.add('active'));
+
+    function closeModals() {
+      modalAuth.classList.remove('active');
+      modalPost.classList.remove('active');
+      errorPass.style.display = 'none';
+      document.getElementById('password').value = '';
+      statusMsg.innerText = '';
+    }
+
+    formPass.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const inputPass = document.getElementById('password').value.trim();
+      if (inputPass.toLowerCase() === SECRET_PASS.toLowerCase()) {
+        modalAuth.classList.remove('active');
+        modalPost.classList.add('active');
+      } else {
+        errorPass.style.display = 'block';
+      }
+    });
+
+    // Converter arquivo para Base64 (necessário para a API do GitHub)
+    const fileToBase64 = file => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = error => reject(error);
+    });
+
+    // Função para enviar arquivo para a API do GitHub
+    async function uploadToGitHub(token, path, fileContentBase64) {
+      const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${path}`;
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: `Upload via site: ${path}`,
+          content: fileContentBase64
+        })
+      });
+      return await response.json();
+    }
+
+    // Carregar jogos salvos
+    function getGames() {
+      const saved = localStorage.getItem('github_games_list');
+      return saved ? JSON.parse(saved) : [];
+    }
+
+    function renderGames() {
+      const games = getGames();
+      gamesGrid.innerHTML = '';
+      games.forEach(game => {
+        const card = document.createElement('div');
+        card.className = 'game-card';
+        card.innerHTML = `
+          <img src="${game.coverUrl}" class="game-img" onerror="this.src='https://via.placeholder.com/600x400/1e293b/94a3b8?text=Jogo'">
+          <div class="game-info">
+            <h3 class="game-title">${game.title}</h3>
+            <p class="game-desc">${game.desc}</p>
+            <a href="${game.fileUrl}" target="_blank" class="game-link">${game.isExe ? 'Baixar .EXE' : 'Jogar / Acessar'}</a>
+          </div>
+        `;
+        gamesGrid.appendChild(card);
+      });
+    }
+
+    // Processar o envio do formulário
+    formGame.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const token = document.getElementById('githubToken').value.trim();
+      const title = document.getElementById('gameTitle').value;
+      const desc = document.getElementById('gameDesc').value;
+      const gameFileInput = document.getElementById('gameFile').files[0];
+      const coverFileInput = document.getElementById('gameCover').files[0];
+
+      if (!gameFileInput) return;
+
+      btnUpload.disabled = true;
+      statusMsg.innerText = "Convertendo e enviando arquivo para o GitHub...";
+
+      try {
+        const timestamp = Date.now();
+        const safeFileName = gameFileInput.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const gamePath = `jogos/${timestamp}_${safeFileName}`;
+        
+        // 1. Upload do Arquivo do Jogo
+        const gameBase64 = await fileToBase64(gameFileInput);
+        const gameResponse = await uploadToGitHub(token, gamePath, gameBase64);
+
+        if (!gameResponse.content) {
+          throw new Error("Erro no upload do jogo. Verifique seu Token do GitHub e nome do repositório.");
+        }
+
+        let fileRawUrl = gameResponse.content.download_url;
+        const isExe = safeFileName.endsWith('.exe') || safeFileName.endsWith('.zip');
+
+        // Se for arquivo HTML, gera o link direto do GitHub Pages
+        if (safeFileName.endsWith('.html')) {
+          fileRawUrl = `https://${GITHUB_USER}.github.io/${GITHUB_REPO}/${gamePath}`;
+        }
+
+        // 2. Upload da Imagem de Capa (se informada)
+        let coverUrl = 'https://via.placeholder.com/600x400/1e293b/94a3b8?text=Jogo';
+        if (coverFileInput) {
+          statusMsg.innerText = "Enviando imagem de capa...";
+          const coverBase64 = await fileToBase64(coverFileInput);
+          const coverPath = `capas/${timestamp}_${coverFileInput.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          const coverResponse = await uploadToGitHub(token, coverPath, coverBase64);
+          if (coverResponse.content) {
+            coverUrl = coverResponse.content.download_url;
+          }
+        }
+
+        // 3. Salvar na Lista
+        const newGame = {
+          title,
+          desc,
+          fileUrl: fileRawUrl,
+          coverUrl: coverUrl,
+          isExe: isExe
+        };
+
+        const games = getGames();
+        games.unshift(newGame);
+        localStorage.setItem('github_games_list', JSON.stringify(games));
+
+        renderGames();
+        statusMsg.innerText = "Upload concluído com sucesso!";
+        setTimeout(() => {
+          closeModals();
+          formGame.reset();
+          btnUpload.disabled = false;
+        }, 1500);
+
+      } catch (err) {
+        statusMsg.innerText = "Erro: " + err.message;
+        btnUpload.disabled = false;
+      }
+    });
+
+    renderGames();
+  </script>
+</body>
+</html>
