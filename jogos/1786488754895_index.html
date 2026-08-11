@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON ESCAPE</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#05060d;color:#fff;font-family:Arial,Helvetica,sans-serif;overflow:hidden}
+  #wrap{height:100vh;display:flex;align-items:center;justify-content:center;position:relative}
+  canvas{background:#080b16;box-shadow:0 0 45px #000;border:1px solid #252b4a;max-width:100vw;max-height:100vh}
+  #hud{position:fixed;top:12px;left:50%;transform:translateX(-50%);width:min(900px,94vw);
+      display:flex;justify-content:space-between;pointer-events:none;font-weight:bold;text-shadow:0 2px 4px #000}
+  .panel{background:#0b1020cc;border:1px solid #303b68;border-radius:10px;padding:9px 14px}
+  #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#02030acc}
+  #box{width:min(560px,90vw);text-align:center;background:#0a0e1ddd;border:1px solid #3a477c;border-radius:18px;padding:30px;box-shadow:0 0 60px #000}
+  h1{font-size:48px;margin:0 0 8px;letter-spacing:5px;color:#5cf6ff}
+  p{color:#c8cee8;line-height:1.5}
+  button{border:0;border-radius:10px;padding:13px 22px;background:#5cf6ff;color:#061018;font-size:17px;font-weight:bold;cursor:pointer}
+  button:hover{filter:brightness(1.12)}
+  .hidden{display:none!important}
+  #hint{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);font-size:13px;color:#8992b5;background:#080b16bb;padding:7px 12px;border-radius:8px}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game" width="900" height="560"></canvas></div>
+
+<div id="hud">
+  <div class="panel">PONTOS: <span id="score">0</span></div>
+  <div class="panel">VIDAS: <span id="lives">3</span></div>
+  <div class="panel">NÍVEL: <span id="level">1</span></div>
+</div>
+
+<div id="overlay">
+  <div id="box">
+    <h1>NEON ESCAPE</h1>
+    <p>Você é o último piloto dentro de uma cidade digital em colapso.<br>
+    Desvie dos drones, pegue os fragmentos de energia e sobreviva o máximo possível.</p>
+    <p><b>WASD / SETAS</b> para mover &nbsp; • &nbsp; <b>ESPAÇO</b> para dash</p>
+    <button id="start">JOGAR</button>
+  </div>
+</div>
+<div id="hint">WASD / SETAS • ESPAÇO = DASH</div>
+
+<script>
+const c=document.getElementById('game'),ctx=c.getContext('2d');
+const W=c.width,H=c.height;
+const keys={};
+let running=false,score=0,lives=3,level=1,frame=0;
+let player, enemies=[], shards=[], particles=[], stars=[], last=0, spawnTimer=0, shardTimer=0;
+
+for(let i=0;i<100;i++) stars.push({x:Math.random()*W,y:Math.random()*H,s:Math.random()*2+.3,v:Math.random()*1.4+.3});
+
+function reset(){
+  score=0;lives=3;level=1;frame=0;spawnTimer=0;shardTimer=0;
+  player={x:W/2,y:H-80,r:15,speed:4.4,dx:0,dy:0,dash:0,inv:0};
+  enemies=[];shards=[];particles=[];
+  updateHud();
+}
+function updateHud(){
+  document.getElementById('score').textContent=score;
+  document.getElementById('lives').textContent=lives;
+  document.getElementById('level').textContent=level;
+}
+function rand(a,b){return Math.random()*(b-a)+a}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function burst(x,y,color,n=15){
+  for(let i=0;i<n;i++) particles.push({x,y,dx:rand(-3,3),dy:rand(-3,3),life:rand(20,45),color});
+}
+function spawnEnemy(){
+  const side=Math.floor(rand(0,4));
+  let x,y;
+  if(side===0){x=-25;y=rand(0,H)}
+  if(side===1){x=W+25;y=rand(0,H)}
+  if(side===2){x=rand(0,W);y=-25}
+  if(side===3){x=rand(0,W);y=H+25}
+  enemies.push({x,y,r:rand(12,20),speed:rand(1.1,1.8)+level*.12,phase:rand(0,6.28)});
+}
+function spawnShard(){
+  shards.push({x:rand(35,W-35),y:rand(70,H-35),r:9,p:rand(0,6.28)});
+}
+function start(){
+  reset();running=true;document.getElementById('overlay').classList.add('hidden');last=performance.now();requestAnimationFrame(loop);
+}
+function gameOver(){
+  running=false;
+  document.getElementById('overlay').classList.remove('hidden');
+  document.getElementById('box').innerHTML=`
+    <h1>GAME OVER</h1>
+    <p>Você sobreviveu até o nível <b>${level}</b> e marcou <b>${score}</b> pontos.</p>
+    <button id="start">TENTAR NOVAMENTE</button>`;
+  document.getElementById('start').onclick=start;
+}
+function update(){
+  frame++;
+  level=1+Math.floor(score/500);
+  const up=keys['ArrowUp']||keys['w'],down=keys['ArrowDown']||keys['s'];
+  const left=keys['ArrowLeft']||keys['a'],right=keys['ArrowRight']||keys['d'];
+  let ax=(right?1:0)-(left?1:0), ay=(down?1:0)-(up?1:0);
+  const len=Math.hypot(ax,ay)||1;
+  ax/=len;ay/=len;
+  if(keys[' '] && player.dash<=0){
+    player.dash=28; player.dx=ax*13; player.dy=ay*13;
+    if(!ax&&!ay){player.dx=0;player.dy=-13}
+    burst(player.x,player.y,'#5cf6ff',20);
+    keys[' ']=false;
+  }
+  if(player.dash>0){player.x+=player.dx;player.y+=player.dy;player.dash--}
+  else {player.x+=ax*player.speed;player.y+=ay*player.speed}
+  player.x=Math.max(18,Math.min(W-18,player.x));player.y=Math.max(55,Math.min(H-18,player.y));
+  if(player.inv>0)player.inv--;
+
+  spawnTimer--;
+  if(spawnTimer<=0){spawnEnemy();spawnTimer=Math.max(18,60-level*4)}
+  shardTimer--;
+  if(shardTimer<=0){spawnShard();shardTimer=rand(80,150)}
+
+  for(const e of enemies){
+    const ang=Math.atan2(player.y-e.y,player.x-e.x);
+    e.phase+=.04;
+    e.x+=Math.cos(ang)*e.speed + Math.sin(e.phase)*.35;
+    e.y+=Math.sin(ang)*e.speed + Math.cos(e.phase)*.35;
+    if(dist(player,e)<player.r+e.r && player.inv<=0){
+      lives--;player.inv=90;burst(player.x,player.y,'#ff4268',30);updateHud();
+      if(lives<=0){gameOver();return}
+    }
+  }
+  enemies=enemies.filter(e=>e.x>-80&&e.x<W+80&&e.y>-80&&e.y<H+80);
+
+  for(let i=shards.length-1;i>=0;i--){
+    const s=shards[i];s.p+=.08;
+    if(dist(player,s)<player.r+s.r+5){
+      score+=100;burst(s.x,s.y,'#ffe65c',18);shards.splice(i,1);updateHud();
+    }
+  }
+  for(const p of particles){p.x+=p.dx;p.y+=p.dy;p.dx*=.98;p.dy*=.98;p.life--}
+  particles=particles.filter(p=>p.life>0);
+  for(const s of stars){s.y+=s.v;if(s.y>H)s.y=0}
+  score+=1;
+  if(frame%10===0)updateHud();
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // fundo
+  ctx.fillStyle='#080b16';ctx.fillRect(0,0,W,H);
+  for(const s of stars){ctx.globalAlpha=.25+s.s/3;ctx.fillStyle='#9aa8ff';ctx.fillRect(s.x,s.y,s.s,s.s)}
+  ctx.globalAlpha=1;
+  // grade
+  ctx.strokeStyle='#151c36';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=45){ctx.beginPath();ctx.moveTo(x,55);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=55;y<H;y+=45){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  ctx.strokeStyle='#28325a';ctx.strokeRect(8,58,W-16,H-66);
+
+  // shards
+  for(const s of shards){
+    const pulse=Math.sin(s.p)*2;
+    ctx.save();ctx.translate(s.x,s.y);ctx.rotate(Math.PI/4);
+    ctx.shadowBlur=18;ctx.shadowColor='#ffe65c';ctx.fillStyle='#ffe65c';
+    ctx.fillRect(-7-pulse/3,-7-pulse/3,14+pulse,14+pulse);ctx.restore();
+  }
+  // inimigos
+  for(const e of enemies){
+    ctx.save();ctx.translate(e.x,e.y);ctx.rotate(e.phase);
+    ctx.shadowBlur=18;ctx.shadowColor='#ff4268';ctx.fillStyle='#ff4268';
+    ctx.beginPath();ctx.moveTo(e.r,0);ctx.lineTo(0,e.r);ctx.lineTo(-e.r,0);ctx.lineTo(0,-e.r);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#160713';ctx.beginPath();ctx.arc(0,0,5,0,Math.PI*2);ctx.fill();ctx.restore();
+  }
+  // player
+  if(player){
+    ctx.save();ctx.translate(player.x,player.y);
+    ctx.globalAlpha=player.inv>0&&Math.floor(player.inv/6)%2?0.35:1;
+    ctx.shadowBlur=25;ctx.shadowColor='#5cf6ff';ctx.fillStyle='#5cf6ff';
+    ctx.beginPath();ctx.arc(0,0,player.r,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#07131c';ctx.beginPath();ctx.arc(0,0,6,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,player.r+5,0,Math.PI*2);ctx.stroke();
+    ctx.restore();ctx.globalAlpha=1;
+  }
+  for(const p of particles){
+    ctx.globalAlpha=p.life/45;ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,3,3);
+  }
+  ctx.globalAlpha=1;
+  ctx.fillStyle='#7d88ae';ctx.font='12px Arial';ctx.fillText('NEON DISTRICT // SECTOR 07',18,35);
+}
+function loop(t){
+  if(!running)return;
+  update();draw();requestAnimationFrame(loop);
+}
+addEventListener('keydown',e=>{keys[e.key]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault()});
+addEventListener('keyup',e=>keys[e.key]=false);
+document.getElementById('start').onclick=start;
+draw();
+</script>
+</body>
+</html>
