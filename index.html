@@ -147,7 +147,6 @@
       background-color: var(--accent-hover);
     }
 
-    /* Modais */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -251,6 +250,7 @@
       font-size: 0.9rem;
       color: #38bdf8;
       text-align: center;
+      word-break: break-word;
     }
 
     footer {
@@ -330,10 +330,8 @@
   </div>
 
   <script>
-    // CONFIGURAÇÃO DO SEU GITHUB
     const GITHUB_USER = "Matt73us";
     const GITHUB_REPO = "MJ-studio";
-
     const SECRET_PASS = "o mj é o melhor";
 
     const btnAuth = document.getElementById('btnAuth');
@@ -374,14 +372,19 @@
       reader.onerror = error => reject(error);
     });
 
-    // Função universal para enviar/atualizar arquivos na API do GitHub
-    async function uploadToGitHub(token, path, fileContentBase64, sha = null) {
+    function utf8ToBase64(str) {
+      return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => 
+        String.fromCharCode('0x' + p1)
+      ));
+    }
+
+    // Função para enviar qualquer arquivo ao GitHub
+    async function uploadToGitHub(token, path, fileContentBase64) {
       const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${path}`;
       const bodyData = {
-        message: `Upload via site: ${path}`,
+        message: `Upload via portal: ${path}`,
         content: fileContentBase64
       };
-      if (sha) bodyData.sha = sha;
 
       const response = await fetch(url, {
         method: 'PUT',
@@ -392,29 +395,48 @@
         },
         body: JSON.stringify(bodyData)
       });
-      return await response.json();
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.message || "Erro de envio ao GitHub.");
+      }
+      return resData;
     }
 
-    // Busca o arquivo jogos.json do GitHub
-    async function fetchGamesFromGitHub() {
+    // Varre a pasta /jogos no GitHub e carrega TODOS os arquivos .json individuais
+    async function fetchAllGamesFromGitHub() {
       try {
-        const response = await fetch(`https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/jogos.json?t=${Date.now()}`);
-        if (!response.ok) return { games: [], sha: null };
-        
-        // Pega o SHA do jogos.json para poder atualizar depois
-        const metaResponse = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/jogos.json`);
-        const metaData = await metaResponse.json();
-        
-        const games = await response.json();
-        return { games: Array.isArray(games) ? games : [], sha: metaData.sha || null };
+        const response = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/jogos?t=${Date.now()}`);
+        if (!response.ok) return [];
+
+        const items = await response.json();
+        if (!Array.isArray(items)) return [];
+
+        // Filtra apenas os arquivos de metadados .json da pasta /jogos
+        const jsonFiles = items.filter(item => item.name.endsWith('.json'));
+
+        // Faz o download de cada .json individualmente
+        const gamesPromises = jsonFiles.map(async file => {
+          try {
+            const res = await fetch(file.download_url);
+            return await res.json();
+          } catch (e) {
+            return null;
+          }
+        });
+
+        const games = await Promise.all(gamesPromises);
+        // Retorna só os válidos e ordena do mais recente para o mais antigo
+        return games.filter(g => g !== null).sort((a, b) => b.timestamp - a.timestamp);
+
       } catch (e) {
-        return { games: [], sha: null };
+        return [];
       }
     }
 
-    // Renderiza os cards na tela
+    // Renderiza a lista de cards na tela
     async function renderGames() {
-      const { games } = await fetchGamesFromGitHub();
+      const games = await fetchAllGamesFromGitHub();
       gamesGrid.innerHTML = '';
 
       if (games.length === 0) {
@@ -430,14 +452,14 @@
           <div class="game-info">
             <h3 class="game-title">${game.title}</h3>
             <p class="game-desc">${game.desc}</p>
-            <a href="${game.fileUrl}" target="_blank" class="game-link">${game.isExe ? 'Baixar .EXE' : 'Jogar / Acessar'}</a>
+            <a href="${game.fileUrl}" target="_blank" class="game-link">${game.isExe ? 'Baixar .EXE / .ZIP' : 'Jogar / Acessar'}</a>
           </div>
         `;
         gamesGrid.appendChild(card);
       });
     }
 
-    // Processar o envio do formulário
+    // Processar o formulário de envio
     formGame.addEventListener('submit', async (e) => {
       e.preventDefault();
       
@@ -450,20 +472,20 @@
       if (!gameFileInput) return;
 
       btnUpload.disabled = true;
-      statusMsg.innerText = "Convertendo e enviando jogo para o GitHub...";
+      statusMsg.innerText = "Convertendo e enviando o jogo...";
 
       try {
         const timestamp = Date.now();
+        // Nome base seguro limpo (ex: "meu_jogo")
+        const baseName = title.toLowerCase().replace(/[^a-z0-9]/g, '_');
         const safeFileName = gameFileInput.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        
+        // Caminho do arquivo principal do jogo
         const gamePath = `jogos/${timestamp}_${safeFileName}`;
         
-        // 1. Upload do Arquivo do Jogo
+        // 1. Upload do Arquivo do Jogo (.exe, .zip ou .html)
         const gameBase64 = await fileToBase64(gameFileInput);
         const gameResponse = await uploadToGitHub(token, gamePath, gameBase64);
-
-        if (!gameResponse.content) {
-          throw new Error("Erro no upload do jogo. Verifique se o seu Token tem a permissão 'repo' ativada.");
-        }
 
         let fileRawUrl = gameResponse.content.download_url;
         const isExe = safeFileName.endsWith('.exe') || safeFileName.endsWith('.zip');
@@ -472,7 +494,7 @@
           fileRawUrl = `https://${GITHUB_USER}.github.io/${GITHUB_REPO}/${gamePath}`;
         }
 
-        // 2. Upload da Capa (se informada)
+        // 2. Upload da Capa (se houver)
         let coverUrl = 'https://via.placeholder.com/600x400/1e293b/94a3b8?text=Jogo';
         if (coverFileInput) {
           statusMsg.innerText = "Enviando imagem de capa...";
@@ -484,11 +506,11 @@
           }
         }
 
-        // 3. Atualizar o arquivo jogos.json no GitHub
-        statusMsg.innerText = "Atualizando lista geral de jogos...";
-        const { games, sha } = await fetchGamesFromGitHub();
-
-        const newGame = {
+        // 3. Criar e Enviar o JSON DEDICADO do jogo para dentro da pasta /jogos
+        statusMsg.innerText = "Criando informações do jogo na pasta /jogos...";
+        
+        const gameMetadata = {
+          timestamp,
           title,
           desc,
           fileUrl: fileRawUrl,
@@ -496,15 +518,12 @@
           isExe: isExe
         };
 
-        games.unshift(newGame);
+        const jsonFileName = `jogos/${timestamp}_${baseName}_info.json`;
+        const jsonBase64 = utf8ToBase64(JSON.stringify(gameMetadata, null, 2));
 
-        // Converte o array atualizado em JSON e depois para Base64
-        const updatedJsonText = JSON.stringify(games, null, 2);
-        const jsonBase64 = btoa(unescape(encodeURIComponent(updatedJsonText)));
+        await uploadToGitHub(token, jsonFileName, jsonBase64);
 
-        await uploadToGitHub(token, 'jogos.json', jsonBase64, sha);
-
-        statusMsg.innerText = "Upload concluído com sucesso!";
+        statusMsg.innerText = "Jogo publicado com sucesso!";
         await renderGames();
 
         setTimeout(() => {
@@ -519,7 +538,7 @@
       }
     });
 
-    // Carrega os jogos na primeira abertura da página
+    // Carrega os jogos ao abrir
     renderGames();
   </script>
 </body>
