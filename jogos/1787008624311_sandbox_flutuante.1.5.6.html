@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sandbox Flutuante 2D - PC Edition</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87ceeb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            transition: background-color 0.5s;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #canvas-container { position: relative; width: 100vw; height: 100vh; }
+        canvas { display: block; }
+
+        /* --- UI DO SANDBOX PRINCIPAL --- */
+        #ui-container {
+            position: absolute; bottom: 50px; left: 50%;
+            transform: translateX(-50%); width: 98%; max-width: 1000px;
+            display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+            z-index: 1000;
+        }
+
+        .ui-bar {
+            display: flex; gap: 5px; background: rgba(0, 0, 0, 0.8);
+            padding: 8px; border-radius: 12px; backdrop-filter: blur(5px);
+            flex-wrap: wrap; justify-content: center; border: 1px solid rgba(255,255,255,0.15);
+            pointer-events: auto;
+        }
+
+        .tool-btn {
+            background: #2c3e50; border: 1px solid #4a6278; color: #ecf0f1;
+            padding: 6px 10px; cursor: pointer; border-radius: 5px;
+            font-size: 14px; font-weight: 600; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+            min-width: 38px; white-space: nowrap;
+        }
+
+        .tool-btn:hover { background: #34495e; }
+        .tool-btn:active { transform: scale(0.95); }
+        .tool-btn.active { background: #2980b9; border-color: #5dade2; box-shadow: 0 0 10px rgba(41, 128, 185, 0.5); }
+
+        .action-btn { background: #c0392b; border-color: #e74c3c; }
+        .spawn-btn { background: #27ae60; border-color: #2ecc71; }
+        .nature-btn { background: #d35400; border-color: #e67e22; }
+        .disaster-btn { background: #8e44ad; border-color: #9b59b6; }
+        .wave-btn { background: #16a085; border-color: #1abc9c; }
+        .thrust-toggle-btn { background: #546e7a; border-color: #78909c; }
+        .builder-btn-main { background: #f39c12; border-color: #d35400; font-size: 15px; padding: 6px 15px; box-shadow: 0 0 15px rgba(243, 156, 18, 0.4); }
+        
+        .toggle-on { background: #27ae60 !important; border-color: #2ecc71 !important; }
+        .toggle-off { background: #7f8c8d !important; border-color: #95a5a6 !important; }
+        .storm-btn { background: #34495e; border-color: #5d6d7e; }
+
+        .separator { width: 1px; background: rgba(255,255,255,0.2); margin: 0 4px; }
+
+        #instructions {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(0, 0, 0, 0.6); padding: 15px; border-radius: 8px;
+            pointer-events: auto; font-size: 13px; border-left: 3px solid #e74c3c;
+            max-width: 250px; z-index: 1000;
+        }
+        
+        #placement-msg {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(46, 204, 113, 0.9); color: #fff; padding: 15px 30px;
+            border-radius: 50px; font-size: 18px; font-weight: bold; pointer-events: none;
+            display: none; box-shadow: 0 0 20px rgba(0,0,0,0.5); border: 2px solid white; z-index: 2000;
+        }
+
+        .popup-menu {
+            position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%);
+            background: rgba(30, 40, 50, 0.95); padding: 15px; border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            display: none; flex-direction: column; gap: 10px; width: 220px; z-index: 1000; pointer-events: auto;
+        }
+
+        .popup-menu label { font-size: 12px; color: #bbb; text-align: center; }
+        .popup-menu input[type=number], .popup-menu input[type=range] { width: 100%; padding: 5px; box-sizing: border-box; }
+        .popup-menu input[type=number] { background: #1c2833; border: 1px solid #4a6278; color: white; border-radius: 5px; text-align: center; }
+        
+        .thrust-controls { display: flex; gap: 5px; }
+        .thrust-controls button { flex-grow: 1; padding: 10px; font-weight: bold; font-size: 14px; border: none; border-radius: 5px; cursor: pointer; }
+        .thrust-controls .reverse { background: #e74c3c; }
+        .thrust-controls .forward { background: #2ecc71; }
+        
+        #evil-value-display, #sea-level-display { font-size: 18px; font-weight: bold; text-align: center; }
+        #evil-value-display { color: #e74c3c; }
+        #sea-level-display { color: #3498db; }
+        
+        #ships-menu {
+            width: 340px; max-height: 60vh; overflow-y: auto; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 5px;
+        }
+        #ships-menu .tool-btn { flex: 1 1 45%; padding: 8px 5px; font-size: 13px; }
+        #ships-menu::-webkit-scrollbar, #custom-tools-hotbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        #ships-menu::-webkit-scrollbar-track, #custom-tools-hotbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 5px; }
+        #ships-menu::-webkit-scrollbar-thumb, #custom-tools-hotbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 5px; }
+
+        #custom-tools-hotbar {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7); border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px; padding: 8px; display: flex; gap: 8px; max-width: 40vw;
+            overflow-x: auto; pointer-events: auto; z-index: 1500; backdrop-filter: blur(5px);
+        }
+
+        /* --- TELA DO CONSTRUTOR (ESTALEIRO) --- */
+        #builder-screen {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            display: none; flex-direction: column; z-index: 3000; pointer-events: none;
+        }
+
+        .builder-topbar {
+            background: #11151c; border-bottom: 2px solid #2980b9; height: 50px;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px; pointer-events: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .builder-title { font-size: 20px; font-weight: bold; color: #3498db; display: flex; align-items: center; gap: 10px; }
+        
+        .builder-actions { display: flex; gap: 10px; }
+        .builder-btn { 
+            background: #2c3e50; border: 1px solid #4a6278; color: white; padding: 8px 15px;
+            border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s;
+        }
+        .builder-btn:hover { background: #34495e; }
+        .btn-exit { background: #c0392b; border-color: #e74c3c; }
+        .btn-exit:hover { background: #e74c3c; }
+        .btn-save { background: #27ae60; border-color: #2ecc71; }
+        .btn-save:hover { background: #2ecc71; }
+
+        .builder-workspace { flex-grow: 1; position: relative; pointer-events: none; }
+        
+        .builder-toolbar {
+            position: absolute; left: 20px; top: 20px; width: 220px;
+            background: rgba(20, 25, 35, 0.95); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px; padding: 15px; pointer-events: auto;
+            display: flex; flex-direction: column; gap: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+        }
+
+        .builder-section-title { font-size: 12px; text-transform: uppercase; color: #888; border-bottom: 1px solid #444; padding-bottom: 5px; margin-bottom: 5px; }
+
+        .builder-tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .b-tool { 
+            background: #1c2833; border: 1px solid #34495e; color: #ccc;
+            padding: 10px 5px; border-radius: 5px; cursor: pointer; font-size: 12px; text-align: center;
+        }
+        .b-tool.active { background: #2980b9; border-color: #3498db; color: white; }
+
+        .builder-prop-panel { display: flex; flex-direction: column; gap: 8px; }
+        .builder-prop-panel select { 
+            width: 100%; padding: 8px; background: #111; color: white; 
+            border: 1px solid #444; border-radius: 5px; outline: none;
+        }
+        
+        .color-picker-container { display: flex; align-items: center; gap: 10px; justify-content: space-between; background: #111; padding: 5px 10px; border-radius: 5px; border: 1px solid #444; }
+        .color-picker-container input[type="color"] { background: none; border: none; cursor: pointer; width: 30px; height: 30px; padding: 0; }
+
+        .snap-toggle { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #ccc; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <!-- Hotbar de Ferramentas Personalizadas (Sandbox) -->
+        <div id="custom-tools-hotbar">
+            <button class="tool-btn" style="background: #27ae60; border-color: #2ecc71; min-width: 40px; font-size: 18px;" onclick="document.getElementById('customToolInput').click()" title="Importar Mod/Ferramenta">➕</button>
+            <input type="file" id="customToolInput" accept=".json" style="display: none;" onchange="handleCustomToolImport(event)">
+            <button class="tool-btn" style="background: #f1c40f; border-color: #f39c12; color: #000; padding: 4px 8px; font-size: 12px; font-weight: bold;" onclick="downloadToolExampleJSON()" title="Baixar exemplo de Mod/Ferramenta">📄 ex.json</button>
+            <div class="separator"></div>
+            <div id="hotbar-items" style="display: flex; gap: 5px;"></div>
+        </div>
+        
+        <div id="instructions">
+            <strong>VERSÃO PC</strong><br><br>
+            <strong>Controles Básicos:</strong><br>
+            🖱️ Clique: Usar Ferramenta<br>
+            🖱️ Scroll: Zoom in/out<br>
+            ⌨️ Tecla X: Ocultar/Mostrar painel<br><br>
+            <em>Para construir seu próprio navio, clique no botão "🛠️ Estaleiro" na barra inferior!</em>
+        </div>
+        
+        <div id="placement-msg">Clique para criar o barco</div>
+
+        <!-- UI DO SANDBOX -->
+        <div id="ui-container">
+            <!-- Menus Ocultos -->
+            <div id="thrust-menu" class="popup-menu">
+                <label>Força de Impulso (1-999):</label>
+                <input type="number" id="thrustSpeedInput" min="1" max="999" value="50" onchange="this.value = Math.min(999, Math.max(1, parseInt(this.value) || 1))">
+                <div class="thrust-controls">
+                    <button class="reverse" onclick="applyThrust(-1)">◀️ RÉ</button>
+                    <button class="forward" onclick="applyThrust(1)">AVANÇAR ▶️</button>
+                </div>
+            </div>
+
+            <div id="evil-menu" class="popup-menu">
+                <label>😈 Nível do Mal (1-100)</label>
+                <div id="evil-value-display">25</div>
+                <input type="range" id="evilLevelInput" min="1" max="100" value="25" oninput="updateEvilLevel(this.value)">
+                <label style="font-size: 10px; color: #888;">1=Paz | 100=Apocalipse</label>
+            </div>
+
+            <div id="sea-level-menu" class="popup-menu">
+                <label>🌊 Nível do Mar (1-100)</label>
+                <div id="sea-level-display">25</div>
+                <input type="range" id="seaLevelInput" min="1" max="100" value="25" oninput="updateSeaLevel(this.value)">
+                <label style="font-size: 10px; color: #888;">1=Seca | 100=Dilúvio</label>
+            </div>
+
+            <div id="ships-menu" class="popup-menu">
+                <label style="width: 100%; margin-bottom: 5px;">Escolha um modelo:</label>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('titanic')">🚢 Titanic</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('ss_atlantic')" style="background: #34495e; border-color: #2c3e50;">🚢 SS Atlantic</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('ss_nomadic')" style="background: #2c3e50; border-color: #1a252f;">🚢 SS Nomadic</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('titanic_front')">🚢 Titanic (Frente)</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('titanic_rear')">🚢 Titanic (Trás)</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('liner_1910')">🚢 Navio de 1910</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('princess_alice')">🚢 SS Princess Alice</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('lusitania')" style="background: #1f1f1f; border-color: #000;">🚢 Lusitania</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('carpathia')" style="background: #c0392b; border-color: #922b21;">🚢 Carpathia</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('californian')" style="background: #2e4053; border-color: #17202a;">🚢 Californian</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('dreadnought')" style="background: #566573; border-color: #2c3e50;">⚔️ Dreadnought</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('pns_yamama')" style="background: #95a5a6; border-color: #7f8c8d;">🚢 PNS Yamama</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('queen_mary')" style="background: #cb4335; border-color: #7b241c;">👑 Queen Mary</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('qm2')" style="background: #1c2833; border-color: #c0392b;">🚢 QM2 (2003)</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('edmund_fitzgerald')" style="background: #d35400; border-color: #a04000;">🚢 Edmund Fitzgerald</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('bitanic')" style="background: #ffffff; color: #333; border-color: #2ecc71;">🏥 Bitanic</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('warship')" style="background: #566573; border-color: #2c3e50;">⚔️ Guerra</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('ss_united_states')" style="background: #283747; border-color: #c0392b;">🚢 SS United</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('pirate')">🏴‍☠️ Pirata</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('fishing')" style="background: #e67e22; border-color: #d35400;">🎣 Pesca</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('aircraft_carrier')" style="background: #2c3e50; border-color: #1a252f;">⚓ P. Aviões</button>
+                <button class="tool-btn spawn-btn" onclick="prepareSpawn('plane')">🛩️ Avião</button>
+                
+                <label id="lbl-custom-ships" style="width: 100%; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 5px;">Meus Navios (Salvos):</label>
+                <!-- Navios customizados entram aqui -->
+            </div>
+
+            <!-- Barras Principais -->
+            <div class="ui-bar">
+                <button class="tool-btn active" onclick="setTool('drag')" id="btn-drag" title="Arrastar">✋</button>
+                
+                <!-- NOVO BOTAO CONSTRUTOR -->
+                <button class="tool-btn builder-btn-main" onclick="enterBuilder()">🛠️ Estaleiro</button>
+
+                <div class="separator"></div>
+
+                <button class="tool-btn" onclick="setTool('cut')" id="btn-cut" title="Cortar">✂️</button>
+                <button class="tool-btn" onclick="setTool('explode')" id="btn-explode" title="Explodir">💣</button>
+                <button class="tool-btn action-btn" onclick="setTool('sink')" id="btn-sink" title="Afundar">⚓</button>
+                
+                <div class="separator"></div>
+                
+                <button class="tool-btn thrust-toggle-btn" onclick="toggleMenu('thrust-menu')" title="Controle de Velocidade">⚙️</button>
+                <button class="tool-btn" onclick="toggleMenu('evil-menu')" title="Nível do Mal" style="color: #e74c3c; border-color: #c0392b;">😈</button>
+                <button class="tool-btn" onclick="toggleMenu('sea-level-menu')" title="Nível do Mar" style="color: #3498db; border-color: #2980b9;">🌊</button>
+                <button class="tool-btn toggle-off" id="btn-decay" onclick="toggleDecay()" title="Ativar desaparecimento de ferrugem">☠️ 1s</button>
+                <button class="tool-btn storm-btn" id="btn-storm" onclick="toggleStorm()" title="Tempestade">⛈️</button>
+
+                <div class="separator"></div>
+
+                <button class="tool-btn disaster-btn" onclick="setTool('fire')" id="btn-fire" title="Fogo">🔥</button>
+                <button class="tool-btn disaster-btn" onclick="setTool('meteor')" id="btn-meteor" title="Meteoro">☄️</button>
+                <button class="tool-btn disaster-btn" onclick="setTool('tornado')" id="btn-tornado" title="Tornado">🌪️</button>
+                <button class="tool-btn disaster-btn" onclick="setTool('whirlpool')" id="btn-whirlpool" title="Redemoinho">🌀</button>
+                <button class="tool-btn disaster-btn" onclick="setTool('blackhole')" id="btn-blackhole" title="Buraco Negro">🌌</button>
+                
+                <div class="separator"></div>
+                <button class="tool-btn wave-btn" onclick="adjustWaves(-5)">🌊-</button>
+                <button class="tool-btn wave-btn" onclick="adjustWaves(5)">🌊+</button>
+            </div>
+
+            <div class="ui-bar">
+                <button class="tool-btn toggle-off" id="btn-ship-collision" onclick="toggleShipCollision()" title="Ativar Colisão Física Entre Navios">💥 Colisão Navios: OFF</button>
+                <div class="separator"></div>
+
+                <button class="tool-btn spawn-btn" onclick="toggleMenu('ships-menu')" style="background: #2980b9; border-color: #3498db; font-size: 15px; padding: 8px 15px;">🚢 Menu de Navios</button>
+                
+                <div class="separator"></div>
+                <button class="tool-btn nature-btn" onclick="setTool('raise_terrain')" id="btn-raise_terrain" title="Levantar Fundo do Mar">⛰️+</button>
+                <button class="tool-btn nature-btn" onclick="setTool('lower_terrain')" id="btn-lower_terrain" title="Abaixar Fundo do Mar">⛰️-</button>
+                <button class="tool-btn nature-btn" onclick="setTool('sand')" id="btn-sand">🏜️</button>
+                <button class="tool-btn nature-btn" onclick="setTool('iceberg')" id="btn-iceberg">🧊</button>
+                <button class="tool-btn nature-btn" onclick="setTool('rock')" id="btn-rock">🪨</button>
+                <div class="separator"></div>
+                <button class="tool-btn action-btn" onclick="clearWorld()">🗑️ Limpar Mapa</button>
+                <button class="tool-btn" onclick="resetCamera()">📷 Foco</button>
+            </div>
+        </div>
+
+        <!-- TELA DO CONSTRUTOR -->
+        <div id="builder-screen">
+            <div class="builder-topbar">
+                <div class="builder-title">🛠️ Estaleiro <span style="font-size:12px; font-weight:normal; color:#aaa;">(Modo Blueprint)</span></div>
+                <div class="builder-actions">
+                    <select id="builderBaseShipSelect" class="builder-btn" style="background: #2980b9; border-color: #3498db; outline: none; cursor: pointer;" onchange="loadBaseShipIntoBuilder(this.value)">
+                        <option value="">📥 Carregar Base do Jogo...</option>
+                        <option value="titanic">Titanic</option>
+                        <option value="ss_atlantic">SS Atlantic</option>
+                        <option value="ss_nomadic">SS Nomadic</option>
+                        <option value="titanic_front">Titanic (Frente)</option>
+                        <option value="titanic_rear">Titanic (Trás)</option>
+                        <option value="liner_1910">Navio de 1910</option>
+                        <option value="princess_alice">SS Princess Alice</option>
+                        <option value="lusitania">Lusitania</option>
+                        <option value="carpathia">Carpathia</option>
+                        <option value="californian">Californian</option>
+                        <option value="dreadnought">Dreadnought</option>
+                        <option value="pns_yamama">PNS Yamama</option>
+                        <option value="queen_mary">Queen Mary</option>
+                        <option value="qm2">QM2 (2003)</option>
+                        <option value="edmund_fitzgerald">Edmund Fitzgerald</option>
+                        <option value="bitanic">Bitanic</option>
+                        <option value="warship">Guerra</option>
+                        <option value="ss_united_states">SS United</option>
+                        <option value="pirate">Pirata</option>
+                        <option value="fishing">Pesca</option>
+                        <option value="aircraft_carrier">P. Aviões</option>
+                        <option value="plane">Avião</option>
+                    </select>
+                    <input type="file" id="builderImportInput" accept=".json" style="display: none;" onchange="handleBuilderImport(event)">
+                    <button class="builder-btn" style="background: #f1c40f; border-color: #f39c12; color: #000; padding: 8px 10px; font-size: 12px;" onclick="downloadExampleJSON()" title="Baixar modelo de exemplo">📄 ex.json</button>
+                    <button class="builder-btn" onclick="document.getElementById('builderImportInput').click()" title="Importar JSON para editar">📁 Importar .JSON</button>
+                    <button class="builder-btn" onclick="exportBuilderJSON()" title="Baixar projeto atual como arquivo .json">💾 Exportar .JSON</button>
+                    <button class="builder-btn btn-save" onclick="saveBuilderToLocal()" title="Salvar e adicionar ao Menu de Navios">⭐ Salvar Navio</button>
+                    <button class="builder-btn btn-exit" onclick="exitBuilder()">Sair para o Jogo</button>
+                </div>
+            </div>
+
+            <div class="builder-workspace">
+                <div class="builder-toolbar">
+                    <div class="builder-section-title">Ferramentas</div>
+                    <div class="builder-tool-grid">
+                        <button class="b-tool active" id="b-tool-add_point" onclick="setBuilderTool('add_point')">📍 Ponto</button>
+                        <button class="b-tool" id="b-tool-add_stick" onclick="setBuilderTool('add_stick')">🔗 Ligar (Peça)</button>
+                        <button class="b-tool" id="b-tool-paint" onclick="setBuilderTool('paint')">🖌️ Pintar Peça</button>
+                        <button class="b-tool" id="b-tool-move_point" onclick="setBuilderTool('move_point')">✋ Mover Ponto</button>
+                        <button class="b-tool" id="b-tool-move_ship" onclick="setBuilderTool('move_ship')">🚢 Mover Navio</button>
+                        <button class="b-tool" id="b-tool-delete" onclick="setBuilderTool('delete')" style="color: #e74c3c;">🗑️ Apagar</button>
+                        <button class="b-tool" id="b-tool-camera" onclick="setBuilderTool('camera')">📷 Câmera Livre</button>
+                    </div>
+
+                    <div class="builder-section-title" style="margin-top: 10px;">Propriedades da Peça</div>
+                    <div class="builder-prop-panel">
+                        <select id="builderStickType">
+                            <option value="hull">Casco (Forte)</option>
+                            <option value="bottom">Fundo (Forte)</option>
+                            <option value="deck">Convés / Piso</option>
+                            <option value="strong_structure">Estrutura Forte (Visível/Resistente)</option>
+                            <option value="absolute_structure">Estrutura Rígida Absoluta (Não entorta)</option>
+                            <option value="structure">Estrutura (Invisível/Fraca)</option>
+                            <option value="funnel">Chaminé (Base)</option>
+                            <option value="funnel_top">Chaminé (Topo)</option>
+                            <option value="war_hull">Casco de Guerra (Muito Forte)</option>
+                            <option value="plane_wing">Asa (Avião)</option>
+                            <option value="custom">-- Cor Personalizada --</option>
+                        </select>
+                        <div class="color-picker-container">
+                            <span style="font-size: 13px; color: #ccc;">Cor Custom:</span>
+                            <input type="color" id="builderColorPicker" value="#3498db">
+                        </div>
+                    </div>
+
+                    <div class="builder-section-title" style="margin-top: 10px;">Opções</div>
+                    <label class="snap-toggle">
+                        <input type="checkbox" id="builderGridSnap" checked>
+                        Encaixar na Grade (Grid Snap)
+                    </label>
+                    <button class="b-tool" style="width: 100%; border-color: #e74c3c; color: #e74c3c; margin-top: 5px;" onclick="clearBuilder()">Limpar Projeto</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        var canvas = document.getElementById('gameCanvas');
+        var ctx = canvas.getContext('2d');
+        var width, height;
+
+        // --- SISTEMA DE MODOS ---
+        var currentMode = 'sandbox'; // 'sandbox' ou 'builder'
+        var sandboxState = { points: [], sticks: [], projectiles: [], playerShipsRanges: [] };
+
+        // Variáveis do Jogo
+        var gravity = 0.2; var friction = 0.99; var waterLevel = 0; var seaLevelSetting = 25; 
+        var baseSandLevel = 0; var waterDensity = 0.06; var waterDrag = 0.92; 
+        
+        var isStormActive = false; var rainDrops = []; var lightningTimer = 0;
+        var wavePhase = 0; var waveAmplitude = 10; var baseWaveAmp = 10; 
+        var waveFrequency = 0.015; var waveSpeed = 0.05; var tsunamiOffset = 0; 
+        var evilLevel = 25; 
+
+        var terrainMap = []; var modifiedTerrain = {}; var terrainSeed = Math.random();
+        var enableDecay = false; var decayQueue = []; var lastDecayTime = 0;
+
+        var COLOR_SKY = '#87ceeb'; var COLOR_WATER_TOP = 'rgba(30, 60, 100, 0.6)'; var COLOR_WATER_BOTTOM = '#000810';
+        var COLOR_SAND = '#d2b48c'; var COLOR_SAND_DARK = '#a0835f';
+
+        var camera = { x: 0, y: 0, scale: 1.0, minScale: 0.1, maxScale: 3.0 };
+
+        var points = []; var sticks = []; var projectiles = []; var playerShipsRanges = []; 
+        var currentTool = 'drag';
+        
+        var isMouseDown = false; var mouseX = 0; var mouseY = 0;
+        var draggedPoint = null; var mousePanStart = null;
+
+        var pendingSpawnType = null;
+        var customShipsPool = {}; var customToolsPool = {}; 
+        var MAX_SHIPS = 25;
+
+        // --- VARIAVEIS DO CONSTRUTOR ---
+        var builderTool = 'add_point';
+        var builderStartPoint = null; // Ponto inicial ao criar um stick
+        var builderTempMouse = {x: 0, y: 0}; // Para desenhar a linha antes de soltar
+        var currentEditingShipId = null; // ID do navio sendo editado atualmente
+
+        var shipCollisionEnabled = false;
+        var globalShipIdCounter = 1;
+        function getNextShipId() { return globalShipIdCounter++; }
+
+        function toggleShipCollision() {
+            shipCollisionEnabled = !shipCollisionEnabled;
+            const btn = document.getElementById('btn-ship-collision');
+            if (shipCollisionEnabled) { btn.classList.add('toggle-on'); btn.classList.remove('toggle-off'); btn.innerText = "💥 Colisão Navios: ON"; } 
+            else { btn.classList.add('toggle-off'); btn.classList.remove('toggle-on'); btn.innerText = "💥 Colisão Navios: OFF"; }
+        }
+
+        var ShipColors = {
+            HULL: '#111111', BOTTOM: '#5e2a2a', DECK: '#ecf0f1', FUNNEL: '#e67e22', FUNNEL_TOP: '#000000', STRUT: 'rgba(100, 100, 100, 0.3)',
+            CRUISE_HULL: '#ffffff', CRUISE_LINE: '#003366', CRUISE_DECK: '#ffffff', CRUISE_WINDOW: '#3498db', CRUISE_POOL: '#00ffff', CRUISE_FUNNEL: '#e74c3c',
+            WAR_HULL: '#7f8c8d', WAR_DECK: '#566573', WAR_TOWER: '#4d5656', WAR_CAMO: '#2c3e50',
+            CARRIER_HULL: '#2c3e50', CARRIER_DECK: '#1a252f', CARRIER_STRIPE: '#f1c40f',
+            CONTAINER_BLUE: '#2980b9', CONTAINER_RED: '#c0392b', CONTAINER_GREEN: '#27ae60',
+            CARGO_HULL: '#c0392b', CARGO_DECK: '#2c3e50', CARGO_BRIDGE: '#ecf0f1',
+            PIRATE_WOOD: '#6d4c41', PIRATE_DECK: '#8d6e63', PIRATE_MAST: '#4e342e',
+            FISHING_HULL: '#d35400', FISHING_CABIN: '#f39c12',
+            ICE: '#d6eaf8', ROCK: '#555555', SAND_DRAW: '#e59866', FIRE: 'rgba(255, 69, 0, 0.8)', RUST: '#FF4500',
+            BITANIC_HULL: '#ffffff', BITANIC_STRIPE: '#2ecc71', BITANIC_CROSS: '#e74c3c',
+            LUSITANIA_HULL: '#1a1a1a', LUSITANIA_BOTTOM: '#800000', CARPATHIA_FUNNEL: '#c0392b', CALIFORNIAN_FUNNEL: '#e59866',
+            QUEEN_HULL: '#111111', QUEEN_FUNNEL: '#c0392b', QM2_FUNNEL: '#c0392b',
+            JET_BODY: '#95a5a6', JET_COCKPIT: '#85c1e9', JET_DARK: '#5f6a6a',
+            US_FUNNEL: '#c0392b', US_TOP: '#2980b9', DREAD_HULL: '#566573', DREAD_BOTTOM: '#922b21',
+            PNS_HULL: '#bdc3c7', PNS_DECK: '#95a5a6', PNS_STRUCTURE: '#ecf0f1'
+        };
+
+        function toWorld(screenX, screenY) { return { x: (screenX - camera.x) / camera.scale, y: (screenY - camera.y) / camera.scale }; }
+        function getWaterHeightAt(x) { return waterLevel + tsunamiOffset + Math.sin(x * waveFrequency + wavePhase) * waveAmplitude; }
+        
+        function getDefaultTerrainHeightAt(x) {
+            return baseSandLevel;
+        }
+        
+        function getTerrainHeightAt(x) {
+            let idx1 = Math.floor(x / 25) * 25; let idx2 = idx1 + 25;
+            let y1 = modifiedTerrain[idx1] !== undefined ? modifiedTerrain[idx1] : getDefaultTerrainHeightAt(idx1);
+            let y2 = modifiedTerrain[idx2] !== undefined ? modifiedTerrain[idx2] : getDefaultTerrainHeightAt(idx2);
+            let t = (x - idx1) / 25; return y1 + t * (y2 - y1);
+        }
+        
+        function adjustWaves(amount) { baseWaveAmp = Math.max(0, Math.min(100, baseWaveAmp + amount)); if(!isStormActive && tsunamiOffset === 0) waveAmplitude = baseWaveAmp; }
+        function toggleDecay() { enableDecay = !enableDecay; const btn = document.getElementById('btn-decay'); if (enableDecay) { btn.classList.remove('toggle-off'); btn.classList.add('toggle-on'); btn.innerText = "☠️ Apodrecer: ON"; } else { btn.classList.remove('toggle-on'); btn.classList.add('toggle-off'); btn.innerText = "☠️ Apodrecer: OFF"; } }
+        function toggleStorm() { isStormActive = !isStormActive; const btn = document.getElementById('btn-storm'); if(isStormActive) { btn.classList.add('toggle-on'); waveAmplitude = 60; COLOR_SKY = '#17202a'; } else { btn.classList.remove('toggle-on'); waveAmplitude = baseWaveAmp; COLOR_SKY = '#87ceeb'; } }
+        function updateEvilLevel(val) { evilLevel = parseInt(val); document.getElementById('evil-value-display').innerText = evilLevel; if (evilLevel > 80 && !isStormActive) { COLOR_SKY = '#2c3e50'; } else if (!isStormActive) { COLOR_SKY = '#87ceeb'; } }
+        function updateSeaLevel(val) { seaLevelSetting = parseInt(val); document.getElementById('sea-level-display').innerText = seaLevelSetting; let factor = 0.4 - (seaLevelSetting - 25) * 0.006; factor = Math.max(0.05, Math.min(0.9, factor)); waterLevel = height * factor; }
+        function toggleMenu(menuId) { const menu = document.getElementById(menuId); document.querySelectorAll('.popup-menu').forEach(m => { if (m.id !== menuId) m.style.display = 'none'; }); if (menu.style.display === 'flex') { menu.style.display = 'none'; } else { menu.style.display = 'flex'; } }
+        function triggerLightning() { document.body.style.backgroundColor = '#ffffff'; setTimeout(() => { document.body.style.backgroundColor = (isStormActive || evilLevel > 80) ? '#17202a' : '#87ceeb'; }, 50); if(points.length > 0) { let attempts = 0; while(attempts < 20) { let target = points[Math.floor(Math.random() * points.length)]; if(!target.pinned && target.y < waterLevel && !target.isRock && !target.isIce) { target.y += 50; target.isLeaking = true; sticks.forEach(s => { if(s.active && (s.p1 === target || s.p2 === target)) s.break(); }); break; } attempts++; } } }
+        function triggerTsunami() { let startTime = Date.now(); let tsunamiInterval = setInterval(() => { let progress = (Date.now() - startTime) / 10000; if (progress > 1) { clearInterval(tsunamiInterval); tsunamiOffset = 0; if(!isStormActive) waveAmplitude = baseWaveAmp; return; } tsunamiOffset = Math.sin(progress * Math.PI) * -150; waveAmplitude = baseWaveAmp + Math.sin(progress * Math.PI) * 50; }, 16); }
+        function resetCamera() { camera = { x: 0, y: 0, scale: 1.0, minScale: 0.1, maxScale: 3.0 }; }
+        function applyThrust(direction) { const speedInput = document.getElementById('thrustSpeedInput'); let baseForce = Math.min(999, Math.max(1, parseInt(speedInput.value) || 1)); speedInput.value = baseForce; const force = direction * (baseForce / 100); playerShipsRanges.forEach(range => { if (points[range.offset]) { for (let i = range.offset; i < range.offset + range.totalPoints; i++) { const p = points[i]; if (!p || p.pinned || p.isRock || p.isIce) continue; p.oldx -= force; } } }); }
+
+        function setTool(tool) { 
+            currentTool = tool; 
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); 
+            const btn = document.getElementById('btn-' + tool); 
+            if (btn) btn.classList.add('active'); 
+            const thrustMenu = document.getElementById('thrust-menu');
+            if (thrustMenu) thrustMenu.style.display = 'none'; 
+            if (tool !== 'place') {
+                const placementMsg = document.getElementById('placement-msg');
+                if(placementMsg) placementMsg.style.display = 'none';
+                pendingSpawnType = null;
+            }
+        }
+        
+        function clearWorld() { points=[]; sticks=[]; projectiles=[]; playerShipsRanges=[]; decayQueue=[]; modifiedTerrain={}; resetCamera(); }
+
+        // --- LÓGICA DO CONSTRUTOR E EDITOR DE NAVIOS ---
+        
+        function enterBuilder() {
+            currentEditingShipId = null; // Reinicia a flag de edição por precaução
+            // Salva o mundo atual
+            sandboxState.points = points;
+            sandboxState.sticks = sticks;
+            sandboxState.projectiles = projectiles;
+            sandboxState.playerShipsRanges = playerShipsRanges;
+            
+            // Limpa para o construtor
+            points = []; sticks = []; projectiles = []; playerShipsRanges = [];
+            
+            currentMode = 'builder';
+            setBuilderTool('add_point');
+            
+            document.getElementById('ui-container').style.display = 'none';
+            document.getElementById('instructions').style.display = 'none';
+            document.getElementById('custom-tools-hotbar').style.display = 'none';
+            document.getElementById('builder-screen').style.display = 'flex';
+            
+            // Posiciona a câmera para a edição
+            camera = { x: width/2, y: height/2, scale: 1.5, minScale: 0.2, maxScale: 4.0 };
+        }
+
+        function exitBuilder() {
+            currentEditingShipId = null; // Limpa ao sair
+            // Restaura o mundo
+            points = sandboxState.points;
+            sticks = sandboxState.sticks;
+            projectiles = sandboxState.projectiles;
+            playerShipsRanges = sandboxState.playerShipsRanges;
+            
+            currentMode = 'sandbox';
+            setTool('drag');
+            
+            document.getElementById('ui-container').style.display = 'flex';
+            document.getElementById('instructions').style.display = 'block';
+            document.getElementById('custom-tools-hotbar').style.display = 'flex';
+            document.getElementById('builder-screen').style.display = 'none';
+            resetCamera();
+        }
+
+        function setBuilderTool(tool) {
+            builderTool = tool;
+            builderStartPoint = null; draggedPoint = null; mousePanStart = null;
+            document.querySelectorAll('.b-tool').forEach(b => b.classList.remove('active'));
+            const btn = document.getElementById('b-tool-' + tool);
+            if(btn) btn.classList.add('active');
+        }
+
+        function clearBuilder() { if(confirm("Deseja apagar tudo que construiu agora?")) { points = []; sticks = []; } }
+
+        function getNearestPoint(wp, maxDist) {
+            let near = null, minDist = maxDist;
+            for(let p of points) { let d = Math.hypot(p.x - wp.x, p.y - wp.y); if(d < minDist) { minDist = d; near = p; } }
+            return near;
+        }
+
+        function getNearestStick(wp, maxDist) {
+            let near = null, minDist = maxDist;
+            for(let s of sticks) {
+                let mx = (s.p1.x + s.p2.x)/2; let my = (s.p1.y + s.p2.y)/2;
+                let d = Math.hypot(mx - wp.x, my - wp.y);
+                if(d < minDist) { minDist = d; near = s; }
+            }
+            return near;
+        }
+
+        function extractBuilderData() {
+            if (points.length === 0) return null;
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            points.forEach(p => {
+                if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+            });
+            let cx = (minX + maxX) / 2; let cy = (minY + maxY) / 2;
+
+            // Arredonda o centro matemático para a grade, mantendo as peças 100% alinhadas ao exportar
+            cx = Math.round(cx / 20) * 20;
+            cy = Math.round(cy / 20) * 20;
+
+            let outPoints = points.map(p => ({ x: p.x - cx, y: p.y - cy }));
+            let outSticks = sticks.map(s => ({
+                p1: points.indexOf(s.p1),
+                p2: points.indexOf(s.p2),
+                type: s.type, colorStr: s.colorStr
+            }));
+            return { points: outPoints, sticks: outSticks };
+        }
+
+        function exportBuilderJSON() {
+            let data = extractBuilderData();
+            if(!data) return alert("Construa algo primeiro!");
+            let dataStr = JSON.stringify(data);
+            let blob = new Blob([dataStr], { type: "application/json" });
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement('a'); a.href = url; a.download = "meu_navio_custom_" + Date.now() + ".json";
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        }
+
+        function loadBaseShipIntoBuilder(type) {
+            if (!type) return;
+            if (points.length > 0) {
+                if (!confirm("Isso apagará o projeto atual no estaleiro. Deseja continuar?")) {
+                    document.getElementById('builderBaseShipSelect').value = '';
+                    return;
+                }
+            }
+            
+            points = []; sticks = [];
+            
+            // Cria o navio no centro lógico (0, 0)
+            createShip(type, 0, 0);
+            
+            // Ajusta a câmera para focar no navio criado
+            camera.x = width / 2;
+            camera.y = height / 2;
+            
+            document.getElementById('builderBaseShipSelect').value = '';
+        }
+
+        function downloadExampleJSON() {
+            const exampleData = {
+                _instrucoes: "Bem-vindo ao modelo base! Os 'points' sao coordenadas (x, y). Os 'sticks' (linhas) conectam pontos usando os indices p1 e p2 da lista de pontos. Experimente os materiais novos em 'type': 'strong_structure' (resistente/forte) e 'absolute_structure' (rigido/nao entorta).",
+                points: [
+                    { x: -60, y: -20 }, { x: -40, y: 20 }, { x: 40, y: 20 }, { x: 60, y: -20 },
+                    { x: -40, y: -20 }, { x: 40, y: -20 }, { x: -10, y: -60 }, { x: 10, y: -60 },
+                    { x: 0, y: -100 }
+                ],
+                sticks: [
+                    { p1: 0, p2: 1, type: "hull" }, { p1: 1, p2: 2, type: "bottom" },
+                    { p1: 2, p2: 3, type: "hull" }, { p1: 0, p2: 4, type: "deck" },
+                    { p1: 4, p2: 5, type: "deck" }, { p1: 5, p2: 3, type: "deck" },
+                    { p1: 1, p2: 4, type: "strong_structure" }, { p1: 2, p2: 5, type: "strong_structure" },
+                    { p1: 4, p2: 6, type: "funnel" }, { p1: 5, p2: 7, type: "funnel" },
+                    { p1: 6, p2: 7, type: "funnel_top" },
+                    { p1: 6, p2: 8, type: "absolute_structure" }, { p1: 7, p2: 8, type: "absolute_structure" }
+                ]
+            };
+            let dataStr = JSON.stringify(exampleData, null, 2);
+            let blob = new Blob([dataStr], { type: "application/json" });
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement('a'); a.href = url; a.download = "navio_exemplo.json";
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        }
+
+        function saveBuilderToLocal() {
+            let data = extractBuilderData();
+            if(!data) return alert("Construa algo primeiro!");
+            
+            let saved = localStorage.getItem('saved_ships');
+            let ships = saved ? JSON.parse(saved) : [];
+            
+            // Lógica para sobreescrever o navio caso esteja editando
+            if (currentEditingShipId) {
+                let existingId = parseInt(currentEditingShipId.replace('local_', ''));
+                let shipIndex = ships.findIndex(s => s.id === existingId);
+                
+                if (shipIndex !== -1) {
+                    if (confirm("Deseja SOBREESCREVER o navio atual? (Cancele para salvar como um NOVO navio)")) {
+                        ships[shipIndex].data = data;
+                        localStorage.setItem('saved_ships', JSON.stringify(ships));
+                        customShipsPool[currentEditingShipId] = data;
+                        alert(`Navio atualizado com sucesso!`);
+                        exitBuilder();
+                        return;
+                    }
+                }
+            }
+
+            // Salvando como um novo navio
+            let name = prompt("Nome do seu navio:");
+            if (!name) return;
+            
+            let newShip = { id: Date.now(), name: name, data: data };
+            ships.push(newShip);
+            localStorage.setItem('saved_ships', JSON.stringify(ships));
+            
+            // Adiciona no menu instantaneamente
+            let shipId = 'local_' + newShip.id;
+            customShipsPool[shipId] = newShip.data;
+            appendShipToMenu(newShip);
+            
+            alert(`Navio "${name}" salvo! Ele está agora no Menu de Navios do Sandbox.`);
+            exitBuilder();
+        }
+        
+        function appendShipToMenu(s) {
+            const menu = document.getElementById('ships-menu');
+            let shipId = 'local_' + s.id;
+            
+            const wrapper = document.createElement('div');
+            wrapper.id = 'wrapper_' + shipId;
+            wrapper.style.cssText = "display: flex; gap: 2px; flex: 1 1 45%;";
+            
+            const btn = document.createElement('button');
+            btn.className = 'tool-btn spawn-btn local-ship-btn';
+            btn.style.background = '#f39c12'; btn.style.borderColor = '#d35400';
+            btn.style.flexGrow = '1';
+            btn.style.padding = '8px 5px';
+            btn.style.fontSize = '13px';
+            btn.innerText = "⭐ " + s.name;
+            btn.onclick = () => { prepareSpawn(shipId); };
+            
+            const editBtn = document.createElement('button');
+            editBtn.className = 'tool-btn';
+            editBtn.style.background = '#34495e';
+            editBtn.style.padding = '8px 5px';
+            editBtn.innerText = "✏️";
+            editBtn.title = "Editar Navio";
+            editBtn.onclick = () => { editSavedShip(shipId); };
+            
+            const delBtn = document.createElement('button');
+            delBtn.className = 'tool-btn';
+            delBtn.style.background = '#c0392b';
+            delBtn.style.padding = '8px 5px';
+            delBtn.innerText = "🗑️";
+            delBtn.title = "Apagar Navio";
+            delBtn.onclick = () => { deleteSavedShip(shipId); };
+            
+            wrapper.appendChild(btn);
+            wrapper.appendChild(editBtn);
+            wrapper.appendChild(delBtn);
+            menu.appendChild(wrapper);
+        }
+
+        function handleBuilderImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!data.points || !data.sticks) throw new Error("JSON inválido.");
+                    
+                    // Limpa o projeto atual e carrega o importado
+                    points = []; sticks = [];
+                    let snap = document.getElementById('builderGridSnap').checked;
+                    
+                    data.points.forEach(p => {
+                        let px = snap ? Math.round(p.x / 20) * 20 : p.x;
+                        let py = snap ? Math.round(p.y / 20) * 20 : p.y;
+                        points.push(new Point(px, py));
+                    });
+                    
+                    data.sticks.forEach(s => {
+                        let p1 = points[s.p1]; let p2 = points[s.p2];
+                        if (p1 && p2) sticks.push(new Stick(p1, p2, s.type || 'structure', s.colorStr));
+                    });
+                    // Centraliza a câmera no navio
+                    camera.x = width/2; camera.y = height/2;
+                } catch (err) { alert("Erro ao importar para edição: " + err.message); }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function loadSavedShips() {
+            let saved = localStorage.getItem('saved_ships');
+            if (saved) {
+                try {
+                    let ships = JSON.parse(saved);
+                    ships.forEach(s => {
+                        let shipId = 'local_' + s.id;
+                        customShipsPool[shipId] = s.data;
+                        appendShipToMenu(s);
+                    });
+                } catch(e) {}
+            }
+        }
+        
+        function editSavedShip(shipId) {
+            let shipData = customShipsPool[shipId];
+            if (!shipData) return;
+            
+            // Salva o mundo atual
+            sandboxState.points = points;
+            sandboxState.sticks = sticks;
+            sandboxState.projectiles = projectiles;
+            sandboxState.playerShipsRanges = playerShipsRanges;
+            
+            points = []; sticks = []; projectiles = []; playerShipsRanges = [];
+            
+            let snap = document.getElementById('builderGridSnap').checked;
+            
+            shipData.points.forEach(p => {
+                let px = snap ? Math.round(p.x / 20) * 20 : p.x;
+                let py = snap ? Math.round(p.y / 20) * 20 : p.y;
+                points.push(new Point(px, py));
+            });
+            
+            shipData.sticks.forEach(s => {
+                let p1 = points[s.p1]; let p2 = points[s.p2];
+                if (p1 && p2) sticks.push(new Stick(p1, p2, s.type || 'structure', s.colorStr));
+            });
+            
+            currentMode = 'builder';
+            setBuilderTool('add_point');
+            
+            document.getElementById('ui-container').style.display = 'none';
+            document.getElementById('instructions').style.display = 'none';
+            document.getElementById('custom-tools-hotbar').style.display = 'none';
+            document.getElementById('builder-screen').style.display = 'flex';
+            document.getElementById('ships-menu').style.display = 'none';
+            
+            camera = { x: width/2, y: height/2, scale: 1.5, minScale: 0.2, maxScale: 4.0 };
+            currentEditingShipId = shipId; // Marca qual navio estamos editando
+        }
+        
+        function deleteSavedShip(shipId) {
+            if(confirm("Tem certeza que deseja apagar este navio salvo permanentemente?")) {
+                let saved = localStorage.getItem('saved_ships');
+                if (saved) {
+                    let ships = JSON.parse(saved);
+                    let existingId = parseInt(shipId.replace('local_', ''));
+                    ships = ships.filter(s => s.id !== existingId);
+                    localStorage.setItem('saved_ships', JSON.stringify(ships));
+                }
+                delete customShipsPool[shipId];
+                let wrapper = document.getElementById('wrapper_' + shipId);
+                if(wrapper) wrapper.remove();
+            }
+        }
+
+        function handleCustomToolImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!data.code || !data.type) throw new Error("JSON da ferramenta inválido. Deve conter 'type' e 'code'.");
+                    
+                    let toolName = prompt("Nome da Ferramenta Customizada:", data.name || file.name.replace('.json', ''));
+                    if (!toolName) return;
+
+                    let toolId = 'custom_tool_' + Date.now();
+                    let compiledFunc = new Function('wp', 'points', 'sticks', 'projectiles', 'ctx', 'wavePhase', data.code);
+                    
+                    customToolsPool[toolId] = { name: toolName, icon: data.icon || "🔧", type: data.type, code: data.code, func: compiledFunc };
+                    const container = document.getElementById('hotbar-items');
+                    const btn = document.createElement('button');
+                    btn.className = 'tool-btn custom-tool-btn'; btn.id = 'btn-' + toolId;
+                    btn.innerText = (data.icon || "🔧") + " " + toolName;
+                    btn.onclick = () => setTool(toolId);
+                    container.appendChild(btn);
+                } catch (err) { alert("Erro ao importar ferramenta: " + err.message); }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function downloadToolExampleJSON() {
+            const exampleData = {
+                name: "Repulsão",
+                icon: "🌀",
+                type: "hold",
+                code: "points.forEach(p => { let dx = p.x - wp.x; let dy = p.y - wp.y; let dist = Math.sqrt(dx*dx + dy*dy); if (dist < 100 && !p.pinned) { p.x += (dx/dist) * 5; p.y += (dy/dist) * 5; } });"
+            };
+            let dataStr = JSON.stringify(exampleData, null, 2);
+            let blob = new Blob([dataStr], { type: "application/json" });
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement('a'); a.href = url; a.download = "tool_exemplo.json";
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        }
+
+        class Point {
+            constructor(x, y, pinned = false) {
+                this.x = x; this.y = y; this.oldx = x; this.oldy = y;
+                this.pinned = pinned; this.mass = 1.0; this.buoyancyFactor = 1.0; 
+                this.isLeaking = false; this.leakRate = 0.0008; 
+                this.isRock = false; this.isIce = false; this.isPlane = false; 
+                this.fireValue = 0; this.isRusting = false; this.radius = 5; this.shipId = 0;
+            }
+            update() {
+                if (this.pinned) return;
+                let groundY = getTerrainHeightAt(this.x);
+                if (this.y >= groundY) { this.y = groundY; this.oldy = this.y; this.x = this.x * 0.5 + this.oldx * 0.5; return; }
+                if (this.fireValue > 0) { if (this.y > getWaterHeightAt(this.x)) this.fireValue = 0; else { this.fireValue -= 0.05; if (Math.random() < 0.01) this.fireValue -= 1; } if (this.fireValue < 0) this.fireValue = 0; }
+                if (this.isLeaking && !this.isRock && !this.isIce && !this.isPlane) { if (this.buoyancyFactor > -0.6) this.buoyancyFactor -= this.leakRate; }
+                let vx = (this.x - this.oldx) * friction; let vy = (this.y - this.oldy) * friction;
+                this.oldx = this.x; this.oldy = this.y; vy += gravity;
+                if (this.y > getWaterHeightAt(this.x)) { const depth = this.y - getWaterHeightAt(this.x); let bFactor = this.buoyancyFactor; if (this.isIce) bFactor = 1.2; if (this.isRock) bFactor = -0.8; vy -= depth * waterDensity * bFactor; vx *= waterDrag; vy *= waterDrag; const terminalVelocity = this.isRock ? 4.0 : 1.5; if (vy > terminalVelocity) vy = terminalVelocity; }
+                if (this.isPlane && !this.isLeaking) { vy -= 0.2; vx *= 0.999; vy *= 0.999; }
+                this.x += vx; this.y += vy;
+            }
+        }
+
+        class Stick {
+            constructor(p1, p2, type = 'structure', colorStr = null) {
+                this.p1 = p1; this.p2 = p2; this.length = this.getDistance(p1, p2);
+                this.type = type; this.colorStr = colorStr;
+                // Add strong_structure com resistencia de 250 e absolute_structure virtualmente inquebrável
+                this.breakingPoint = { 'hull': 150, 'bottom': 150, 'deck': 100, 'strong_structure': 250, 'absolute_structure': 99999, 'war_hull': 200, 'war_armor': 250, 'cargo_hull': 160, 'cargo_deck': 120, 'pirate_hull': 100, 'pirate_mast': 80, 'fishing_hull': 80, 'fishing_cabin': 60, 'carrier_deck': 300, 'carrier_hull': 250, 'plane_wing': 100, 'plane_fuselage': 150, 'ice': 60, 'rock': 300, 'sand_ground': 500, 'bitanic_hull': 150, 'bitanic_stripe': 150, 'bitanic_cross': 150, 'container': 80, 'lusitania_hull': 150, 'lusitania_bottom': 150, 'carpathia_hull': 150, 'carpathia_funnel': 100, 'californian_hull': 150, 'queen_hull': 160, 'queen_funnel': 100, 'qm2_hull': 180, 'qm2_funnel': 100, 'cargo_bridge': 120, 'jet_body': 100, 'us_funnel': 150, 'us_top': 150, 'dread_hull': 180, 'dread_bottom': 180, 'pns_hull': 180 }[type] || 60;
+                this.active = true; this.rustLevel = 0; this.inDecayQueue = false;
+            }
+            getDistance(p1, p2) { return Math.hypot(p1.x - p2.x, p1.y - p2.y); }
+            update() {
+                if (!this.active) return;
+                let groundY1 = getTerrainHeightAt(this.p1.x); let groundY2 = getTerrainHeightAt(this.p2.x);
+                let touchingSand = (this.p1.y >= groundY1 - 10 || this.p2.y >= groundY2 - 10);
+                
+                if (touchingSand) { this.p1.isRusting = true; this.p2.isRusting = true; }
+                if (this.p1.isRusting || this.p2.isRusting) {
+                    this.p1.isRusting = true; this.p2.isRusting = true;
+                    if (!['ice', 'rock', 'sand_ground'].includes(this.type)) {
+                        if (this.rustLevel < 1.0) { this.rustLevel += 0.05; } 
+                        else if (enableDecay && !this.inDecayQueue) { decayQueue.push(this); this.inDecayQueue = true; }
+                    }
+                }
+                if (this.p1.fireValue > 10 || this.p2.fireValue > 10) { this.breakingPoint -= 0.1; if (this.p1.fireValue > 20 && Math.random()<0.01) this.p2.fireValue=30; if (this.p2.fireValue > 20 && Math.random()<0.01) this.p1.fireValue=30; if (this.breakingPoint <= 0) this.break(); }
+                if (!this.p1.isRock && !this.p1.isIce && !this.p1.isPlane) { if (this.p1.isLeaking && this.p1.y > getWaterHeightAt(this.p1.x) && Math.random()<0.005) this.p2.isLeaking=true; if (this.p2.isLeaking && this.p2.y > getWaterHeightAt(this.p2.x) && Math.random()<0.005) this.p1.isLeaking=true; }
+                if (this.type === 'plane_wing' && !this.active) { this.p1.isLeaking=true; this.p2.isLeaking=true; }
+                const dx = this.p2.x - this.p1.x; const dy = this.p2.y - this.p1.y;
+                const distance = Math.sqrt(dx * dx + dy * dy); const difference = this.length - distance;
+                const percent = difference / distance / 2;
+                if (Math.abs(difference) > this.breakingPoint) { this.break(); return; }
+                const offsetX = dx * percent; const offsetY = dy * percent;
+                if (!this.p1.pinned) { this.p1.x -= offsetX; this.p1.y -= offsetY; }
+                if (!this.p2.pinned) { this.p2.x += offsetX; this.p2.y += offsetY; }
+            }
+            break() { this.active = false; if (['hull', 'bottom', 'cruise_hull', 'war_hull', 'cargo_hull', 'pirate_hull', 'carrier_hull', 'fishing_hull', 'bitanic_hull', 'lusitania_hull', 'lusitania_bottom', 'carpathia_hull', 'californian_hull', 'queen_hull', 'qm2_hull', 'jet_body', 'dread_hull', 'dread_bottom', 'pns_hull'].includes(this.type)) { this.p1.isLeaking = true; this.p2.isLeaking = true; } }
+            draw() {
+                if (!this.active) return;
+                ctx.beginPath(); ctx.moveTo(this.p1.x, this.p1.y); ctx.lineTo(this.p2.x, this.p2.y);
+                if (this.p1.fireValue > 20 || this.p2.fireValue > 20) { ctx.strokeStyle = `rgba(255, ${Math.random()*150}, 0, 0.8)`; ctx.lineWidth = Math.random()*4+2; } 
+                else if (this.rustLevel > 0.1) { ctx.strokeStyle = ShipColors.RUST; ctx.lineWidth = 4; } 
+                else { this.setNormalStyle(); }
+                ctx.stroke(); ctx.lineCap = 'butt';
+            }
+            setNormalStyle() {
+                if (this.colorStr) { ctx.strokeStyle = this.colorStr; ctx.lineWidth = this.type === 'sand_ground' ? 6 : 4; } 
+                else {
+                    if (this.type === 'hull') { ctx.strokeStyle = ShipColors.HULL; ctx.lineWidth = 5; }
+                    else if (this.type === 'bottom') { ctx.strokeStyle = ShipColors.BOTTOM; ctx.lineWidth = 5; }
+                    else if (this.type === 'deck') { ctx.strokeStyle = ShipColors.DECK; ctx.lineWidth = 4; }
+                    else if (this.type === 'funnel') { ctx.strokeStyle = ShipColors.FUNNEL; ctx.lineWidth = 8; }
+                    else if (this.type === 'funnel_top') { ctx.strokeStyle = ShipColors.FUNNEL_TOP; ctx.lineWidth = 9; }
+                    else if (this.type === 'cruise_hull') { ctx.strokeStyle = ShipColors.CRUISE_HULL; ctx.lineWidth = 5; }
+                    else if (this.type === 'cruise_deck') { ctx.strokeStyle = ShipColors.CRUISE_DECK; ctx.lineWidth = 4; }
+                    else if (this.type === 'cruise_pool') { ctx.strokeStyle = ShipColors.CRUISE_POOL; ctx.lineWidth = 4; }
+                    else if (this.type === 'cruise_line') { ctx.strokeStyle = ShipColors.CRUISE_LINE; ctx.lineWidth = 4; }
+                    else if (this.type === 'war_hull') { ctx.strokeStyle = ShipColors.WAR_HULL; ctx.lineWidth = 6; }
+                    else if (this.type === 'war_deck') { ctx.strokeStyle = ShipColors.WAR_DECK; ctx.lineWidth = 5; }
+                    else if (this.type === 'war_tower') { ctx.strokeStyle = ShipColors.WAR_TOWER; ctx.lineWidth = 4; }
+                    else if (this.type === 'war_camo') { ctx.strokeStyle = ShipColors.WAR_CAMO; ctx.lineWidth = 5; }
+                    else if (this.type === 'carrier_hull') { ctx.strokeStyle = ShipColors.CARRIER_HULL; ctx.lineWidth = 7; }
+                    else if (this.type === 'carrier_deck') { ctx.strokeStyle = ShipColors.CARRIER_DECK; ctx.lineWidth = 5; }
+                    else if (this.type === 'carrier_stripe') { ctx.strokeStyle = ShipColors.CARRIER_STRIPE; ctx.lineWidth = 3; }
+                    else if (this.type === 'container_blue') { ctx.strokeStyle = ShipColors.CONTAINER_BLUE; ctx.lineWidth = 10; }
+                    else if (this.type === 'container_red') { ctx.strokeStyle = ShipColors.CONTAINER_RED; ctx.lineWidth = 10; }
+                    else if (this.type === 'container_green') { ctx.strokeStyle = ShipColors.CONTAINER_GREEN; ctx.lineWidth = 10; }
+                    else if (this.type === 'bitanic_hull') { ctx.strokeStyle = ShipColors.BITANIC_HULL; ctx.lineWidth = 5; }
+                    else if (this.type === 'bitanic_stripe') { ctx.strokeStyle = ShipColors.BITANIC_STRIPE; ctx.lineWidth = 5; }
+                    else if (this.type === 'bitanic_cross') { ctx.strokeStyle = ShipColors.BITANIC_CROSS; ctx.lineWidth = 4; }
+                    else if (this.type === 'fishing_hull') { ctx.strokeStyle = ShipColors.FISHING_HULL; ctx.lineWidth = 5; }
+                    else if (this.type === 'fishing_cabin') { ctx.strokeStyle = ShipColors.FISHING_CABIN; ctx.lineWidth = 4; }
+                    else if (this.type === 'cargo_hull') { ctx.strokeStyle = ShipColors.CARGO_HULL; ctx.lineWidth = 6; }
+                    else if (this.type === 'cargo_deck') { ctx.strokeStyle = ShipColors.CARGO_DECK; ctx.lineWidth = 5; }
+                    else if (this.type === 'cargo_bridge') { ctx.strokeStyle = ShipColors.CARGO_BRIDGE; ctx.lineWidth = 5; }
+                    else if (this.type === 'pirate_hull') { ctx.strokeStyle = ShipColors.PIRATE_WOOD; ctx.lineWidth = 5; }
+                    else if (this.type === 'pirate_mast') { ctx.strokeStyle = ShipColors.PIRATE_MAST; ctx.lineWidth = 4; }
+                    else if (this.type === 'plane_wing') { ctx.strokeStyle = '#95a5a6'; ctx.lineWidth = 4; }
+                    else if (this.type === 'plane_fuselage') { ctx.strokeStyle = '#566573'; ctx.lineWidth = 6; }
+                    else if (this.type === 'jet_body') { ctx.strokeStyle = ShipColors.JET_BODY; ctx.lineWidth = 5; }
+                    else if (this.type === 'jet_cockpit') { ctx.strokeStyle = ShipColors.JET_COCKPIT; ctx.lineWidth = 4; }
+                    else if (this.type === 'jet_dark') { ctx.strokeStyle = ShipColors.JET_DARK; ctx.lineWidth = 4; }
+                    else if (this.type === 'ice') { ctx.strokeStyle = ShipColors.ICE; ctx.lineWidth = 10; ctx.lineCap = 'round'; }
+                    else if (this.type === 'rock') { ctx.strokeStyle = ShipColors.ROCK; ctx.lineWidth = 8; }
+                    else if (this.type === 'sand_ground') { ctx.strokeStyle = ShipColors.SAND_DRAW; ctx.lineWidth = 8; }
+                    else if (this.type === 'lusitania_hull') { ctx.strokeStyle = ShipColors.LUSITANIA_HULL; ctx.lineWidth = 5; }
+                    else if (this.type === 'lusitania_bottom') { ctx.strokeStyle = ShipColors.LUSITANIA_BOTTOM; ctx.lineWidth = 5; }
+                    else if (this.type === 'carpathia_hull') { ctx.strokeStyle = ShipColors.HULL; ctx.lineWidth = 5; }
+                    else if (this.type === 'carpathia_funnel') { ctx.strokeStyle = ShipColors.CARPATHIA_FUNNEL; ctx.lineWidth = 8; }
+                    else if (this.type === 'californian_hull') { ctx.strokeStyle = ShipColors.HULL; ctx.lineWidth = 5; }
+                    else if (this.type === 'californian_funnel') { ctx.strokeStyle = ShipColors.CALIFORNIAN_FUNNEL; ctx.lineWidth = 8; }
+                    else if (this.type === 'queen_hull') { ctx.strokeStyle = ShipColors.QUEEN_HULL; ctx.lineWidth = 5; }
+                    else if (this.type === 'queen_funnel') { ctx.strokeStyle = ShipColors.QUEEN_FUNNEL; ctx.lineWidth = 8; }
+                    else if (this.type === 'qm2_hull') { ctx.strokeStyle = ShipColors.HULL; ctx.lineWidth = 5; }
+                    else if (this.type === 'qm2_funnel') { ctx.strokeStyle = ShipColors.QM2_FUNNEL; ctx.lineWidth = 8; }
+                    else if (this.type === 'us_funnel') { ctx.strokeStyle = ShipColors.US_FUNNEL; ctx.lineWidth = 10; }
+                    else if (this.type === 'us_top') { ctx.strokeStyle = ShipColors.US_TOP; ctx.lineWidth = 10; }
+                    else if (this.type === 'dread_hull') { ctx.strokeStyle = ShipColors.DREAD_HULL; ctx.lineWidth = 6; }
+                    else if (this.type === 'dread_bottom') { ctx.strokeStyle = ShipColors.DREAD_BOTTOM; ctx.lineWidth = 6; }
+                    else if (this.type === 'pns_hull') { ctx.strokeStyle = ShipColors.PNS_HULL; ctx.lineWidth = 5; }
+                    else if (this.type === 'pns_deck') { ctx.strokeStyle = ShipColors.PNS_DECK; ctx.lineWidth = 4; }
+                    else if (this.type === 'pns_structure') { ctx.strokeStyle = ShipColors.PNS_STRUCTURE; ctx.lineWidth = 4; }
+                    // Cor para o novo material forte
+                    else if (this.type === 'strong_structure') { ctx.strokeStyle = '#7f8c8d'; ctx.lineWidth = 4; }
+                    // Cor para o material absoluto
+                    else if (this.type === 'absolute_structure') { ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 5; }
+                    else { ctx.strokeStyle = ShipColors.STRUT; ctx.lineWidth = 1; }
+                }
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, vx, vy, type) {
+                this.p = new Point(x, y); this.p.x -= vx; this.p.oldx = x; this.p.y -= vy; this.p.oldy = y;
+                this.type = type; this.p.radius = type === 'meteor' ? 20 : (type === 'bomb' ? 15 : 5); this.p.mass = type === 'meteor' ? 50 : 10;
+                this.active = true; this.vx = vx; this.vy = vy; if(type === 'torpedo') { this.p.radius = 4; this.p.buoyancyFactor = 0; }
+            }
+            update() {
+                if(!this.active) return;
+                if (this.type === 'torpedo') { this.p.x += this.vx; this.p.y += this.vy; this.p.oldx = this.p.x - this.vx; this.p.oldy = this.p.y - this.vy; }
+                this.p.update();
+                if (this.type === 'meteor' && this.p.y > getWaterHeightAt(this.p.x)) { triggerTsunami(); this.active = false; }
+                if (this.p.y > getTerrainHeightAt(this.p.x)) this.active = false;
+            }
+            draw() {
+                if(!this.active) return;
+                ctx.beginPath();
+                if(this.type === 'meteor') { ctx.fillStyle = '#e67e22'; ctx.arc(this.p.x, this.p.y, this.p.radius, 0, Math.PI*2); ctx.fill(); }
+                else if(this.type === 'shell') { ctx.fillStyle = '#ff3333'; ctx.arc(this.p.x, this.p.y, 5, 0, Math.PI*2); ctx.fill(); }
+                else if(this.type === 'torpedo') { ctx.fillStyle = ShipColors.TORPEDO; ctx.ellipse(this.p.x, this.p.y, 8, 4, Math.atan2(this.vy, this.vx), 0, Math.PI*2); ctx.fill(); }
+                else { ctx.fillStyle = '#000'; ctx.arc(this.p.x, this.p.y, 6, 0, Math.PI*2); ctx.fill(); }
+            }
+        }
+        
+        function checkCollisions() {
+            let ships = []; let obstacles = [];
+            for (let p of points) { if (p.isRock || p.isIce || p.pinned) obstacles.push(p); else ships.push(p); }
+            for(let proj of projectiles) { if(proj.active) obstacles.push(proj.p); }
+            
+            for (let s of ships) {
+                for (let o of obstacles) {
+                    const dx = s.x - o.x; const dy = s.y - o.y; const distSq = dx*dx + dy*dy; const minDist = s.radius + (o.radius || 5) + 10; 
+                    if (distSq < minDist * minDist) {
+                        const dist = Math.sqrt(distSq); const overlap = minDist - dist; const nx = dx / dist; const ny = dy / dist; const responseFactor = o.pinned ? 1.0 : 0.8;
+                        s.x += nx * overlap * responseFactor; s.y += ny * overlap * responseFactor;
+                        if (!o.pinned && !o.isPlane) { if(!projectiles.some(p => p.p === o)) { o.x -= nx * overlap * (1 - responseFactor); o.y -= ny * overlap * (1 - responseFactor); } }
+                        const relVx = (s.x - s.oldx) - (o.x - o.oldx); const relVy = (s.y - s.oldy) - (o.y - o.oldy); const impactSpeed = Math.sqrt(relVx*relVx + relVy*relVy);
+                        if (obstacles.includes(o) && projectiles.some(p => p.p === o)) {
+                             let projObj = projectiles.find(p => p.p === o);
+                             if(projObj) {
+                                 projObj.active = false; s.isLeaking = true; 
+                                 points.forEach(p_exp => {
+                                      let d = Math.hypot(p_exp.x - o.x, p_exp.y - o.y);
+                                      if(d < 120) { let ang = Math.atan2(p_exp.y - o.y, p_exp.x - o.x); if(!p_exp.pinned) { p_exp.x += Math.cos(ang)*50; p_exp.y += Math.sin(ang)*50; p_exp.isLeaking = true; } }
+                                 });
+                                 sticks.forEach(st => { if(Math.hypot((st.p1.x+st.p2.x)/2 - o.x, (st.p1.y+st.p2.y)/2 - o.y) < 100) st.break(); });
+                             }
+                        }
+                        if (impactSpeed > 2.5) {
+                            s.isLeaking = true; 
+                            if (impactSpeed > 4.0) { for (let st of sticks) { if ((st.p1 === s || st.p2 === s) && st.active) { if (st.type.includes('hull') || st.type === 'bottom' || st.type.includes('plane_wing')) st.break(); } } }
+                        }
+                    }
+                }
+            }
+            if (shipCollisionEnabled) {
+                for (let i = 0; i < ships.length; i++) {
+                    for (let j = i + 1; j < ships.length; j++) {
+                        let s1 = ships[i]; let s2 = ships[j];
+                        if (s1.shipId !== s2.shipId && s1.shipId !== 0 && s2.shipId !== 0) {
+                            const dx = s1.x - s2.x; const dy = s1.y - s2.y; const distSq = dx*dx + dy*dy; const minDist = s1.radius + s2.radius + 5;
+                            if (distSq < minDist * minDist) {
+                                const dist = Math.sqrt(distSq); const overlap = minDist - dist; const nx = dx / dist; const ny = dy / dist;
+                                s1.x += nx * overlap * 0.5; s1.y += ny * overlap * 0.5; s2.x -= nx * overlap * 0.5; s2.y -= ny * overlap * 0.5;
+                                const relVx = (s1.x - s1.oldx) - (s2.x - s2.oldx); const relVy = (s1.y - s1.oldy) - (s2.y - s2.oldy); const impactSpeed = Math.sqrt(relVx*relVx + relVy*relVy);
+                                if (impactSpeed > 3.0) { s1.isLeaking = true; s2.isLeaking = true; if (impactSpeed > 4.5) { sticks.forEach(st => { if ((st.p1 === s1 || st.p2 === s1 || st.p1 === s2 || st.p2 === s2) && st.active) { if (Math.random() < 0.1) st.break(); } }); } }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function createShipBase(startX, startY, segW, segH, length, type) {
+            let tempPoints = [];
+            for (let i = 0; i <= length; i++) {
+                let x = startX + i * segW; let yOffset = 0;
+                if (type === 'titanic' || type === 'bitanic' || type === 'lusitania' || type === 'carpathia' || type === 'californian' || type === 'queen_mary' || type === 'qm2' || type === 'edmund_fitzgerald' || type === 'dreadnought' || type === 'pns_yamama' || type === 'ss_atlantic') { if (i < 3) yOffset = (3 - i) * -5; if (i > length - 3) yOffset = (i - (length - 3)) * -4; } 
+                else if (type === 'warship') { if (i < 5) yOffset = (5 - i) * -4; } 
+                else if (type === 'cruise') { if (i < 4) yOffset = (4-i)*-6; } 
+                else if (type === 'ss_united_states') { if (i < 5) yOffset = (5 - i) * -5; if (i > length - 5) yOffset = (i - (length - 5)) * -4; } 
+                else if (type === 'pirate') { let yCurve = Math.pow((i - length/2)/(length/2), 2) * -30; yOffset = yCurve; if(i > length - 4) yOffset -= (i-(length-4)) * 10; } 
+                else if (type === 'carrier') { yOffset = -5; } else if (type === 'fishing') { if (i === 0 || i === length) yOffset = -5; }
+                else if (type === 'princess_alice') { if (i < 2) yOffset = (2 - i) * -3; if (i > length - 2) yOffset = (i - (length - 2)) * -2; }
+                else { if (i < 4) yOffset = (4-i)*-3; }
+                if (type === 'dreadnought' && i === 0) yOffset += 10; if (type === 'pns_yamama' && i === 0) yOffset += 5;
+                tempPoints.push(new Point(x, startY + segH * 2 + yOffset)); tempPoints.push(new Point(x, startY + segH + yOffset)); tempPoints.push(new Point(x, startY + yOffset));            
+            }
+            const offset = points.length; points.push(...tempPoints);
+            for (let i = 0; i < length; i++) {
+                let c1 = offset + i * 3, c2 = offset + (i + 1) * 3;
+                let b1 = points[c1], m1 = points[c1+1], t1 = points[c1+2];
+                let b2 = points[c2], m2 = points[c2+1], t2 = points[c2+2];
+                let hullT = 'hull'; let deckT = 'deck'; let botT = 'bottom';
+                if (type === 'bitanic') { hullT = 'bitanic_stripe'; botT = 'bitanic_hull'; } else if (type === 'warship') { hullT = 'war_hull'; deckT = 'war_deck'; botT = 'war_hull'; } else if (type === 'cruise') { hullT = 'cruise_hull'; deckT = 'cruise_deck'; botT = 'cruise_hull'; } else if (type === 'edmund_fitzgerald') { hullT = 'cargo_hull'; deckT = 'cargo_deck'; botT = 'cargo_hull'; } else if (type === 'pirate') { hullT = 'pirate_hull'; deckT = 'pirate_mast'; botT = 'pirate_hull'; } else if (type === 'carrier') { hullT = 'carrier_hull'; deckT = 'carrier_deck'; botT = 'carrier_hull'; } else if (type === 'fishing') { hullT = 'fishing_hull'; deckT = 'fishing_cabin'; botT = 'fishing_hull'; } else if (type === 'lusitania') { hullT = 'lusitania_hull'; deckT = 'deck'; botT = 'lusitania_bottom'; } else if (type === 'carpathia') { hullT = 'carpathia_hull'; deckT = 'deck'; botT = 'carpathia_hull'; } else if (type === 'californian') { hullT = 'californian_hull'; deckT = 'deck'; botT = 'californian_hull'; } else if (type === 'queen_mary') { hullT = 'queen_hull'; deckT = 'deck'; botT = 'queen_hull'; } else if (type === 'qm2') { hullT = 'qm2_hull'; deckT = 'deck'; botT = 'qm2_hull'; } else if (type === 'ss_united_states') { hullT = 'hull'; deckT = 'deck'; botT = 'bottom'; } else if (type === 'dreadnought') { hullT = 'dread_hull'; deckT = 'dread_hull'; botT = 'dread_bottom'; } else if (type === 'pns_yamama') { hullT = 'pns_hull'; deckT = 'pns_deck'; botT = 'pns_hull'; } else if (type === 'ss_atlantic') { hullT = 'hull'; deckT = 'deck'; botT = 'bottom'; }
+                sticks.push(new Stick(b1, b2, botT)); sticks.push(new Stick(m1, m2, hullT)); sticks.push(new Stick(b1, m1, botT)); sticks.push(new Stick(m1, t1, hullT)); sticks.push(new Stick(t1, t2, deckT)); sticks.push(new Stick(b1, m2, 'structure')); sticks.push(new Stick(m1, b2, 'structure')); sticks.push(new Stick(m1, t2, 'structure')); sticks.push(new Stick(t1, m2, 'structure'));
+                if (type === 'cruise') { let d1 = new Point(t1.x, t1.y - 20); let d2 = new Point(t2.x, t2.y - 20); points.push(d1, d2); sticks.push(new Stick(t1, d1, 'cruise_hull'), new Stick(t2, d2, 'cruise_hull'), new Stick(d1, d2, 'cruise_deck'), new Stick(t1, d2, 'structure')); if (i > 5 && i < length - 5) sticks.push(new Stick(d1, d2, 'cruise_line')); }
+                if (type === 'bitanic' && i > 5 && i < 15 && i % 4 === 0) sticks.push(new Stick(m1, t2, 'bitanic_cross')); 
+            }
+            let last = offset + length * 3; 
+            let endType = type === 'bitanic' ? 'bitanic_hull' : (type === 'warship' ? 'war_hull' : (type === 'ss_united_states' ? 'hull' : (type === 'edmund_fitzgerald' ? 'cargo_hull' : (type === 'pirate' ? 'pirate_hull' : (type === 'carrier' ? 'carrier_hull' : (type === 'fishing' ? 'fishing_hull' : (type === 'cruise' ? 'cruise_hull' : (type === 'lusitania' ? 'lusitania_hull' : (type === 'carpathia' ? 'carpathia_hull' : (type === 'californian' ? 'californian_hull' : (type === 'queen_mary' ? 'queen_hull' : (type === 'qm2' ? 'qm2_hull' : (type === 'dreadnought' ? 'dread_hull' : (type === 'pns_yamama' ? 'pns_hull' : (type === 'ss_atlantic' ? 'hull' : 'hull')))))))))))))));
+            sticks.push(new Stick(points[last], points[last+1], endType)); sticks.push(new Stick(points[last+1], points[last+2], endType));
+            return offset;
+        }
+        function trackNewShip(offset, length) { playerShipsRanges.push({ offset, totalPoints: length }); }
+        
+        function prepareSpawn(type) {
+            if (playerShipsRanges.length >= MAX_SHIPS) { alert("Limite de 25 barcos atingido! Limpe o mapa ou destrua alguns."); return; }
+            pendingSpawnType = type; setTool('place');
+            document.getElementById('placement-msg').style.display = 'block';
+            document.querySelectorAll('.popup-menu').forEach(m => m.style.display = 'none');
+        }
+
+        function createShip(type, centerX, centerY) {
+            const startLen = points.length;
+            if ((type.startsWith('custom_') || type.startsWith('local_')) && customShipsPool[type]) {
+                let shipData = customShipsPool[type];
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                shipData.points.forEach(p => { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; });
+                let cx = (minX + maxX) / 2; let cy = (minY + maxY) / 2;
+                const offset = points.length; let tempPoints = [];
+                shipData.points.forEach(p => { tempPoints.push(new Point(centerX + (p.x - cx), centerY + (p.y - cy))); });
+                points.push(...tempPoints);
+                shipData.sticks.forEach(s => { let p1 = points[offset + s.p1]; let p2 = points[offset + s.p2]; if (p1 && p2) sticks.push(new Stick(p1, p2, s.type || 'structure', s.colorStr)); });
+                trackNewShip(offset, shipData.points.length);
+            } else {
+                let startX = centerX;
+                if (type === 'titanic_front' || type === 'titanic_rear') {
+                    const off = points.length; let isRear = type === 'titanic_rear';
+                    let pts = [ new Point(centerX, centerY + 80), new Point(centerX - 18, centerY + 40), new Point(centerX + 18, centerY + 40), new Point(centerX - 35, centerY), new Point(centerX + 35, centerY), new Point(centerX - 42, centerY - 40), new Point(centerX + 42, centerY - 40), new Point(centerX - 38, centerY - 55), new Point(centerX + 38, centerY - 55), new Point(centerX - 32, centerY - 70), new Point(centerX + 32, centerY - 70), new Point(centerX - 25, centerY - 85), new Point(centerX + 25, centerY - 85), new Point(centerX - 20, centerY - 100), new Point(centerX + 20, centerY - 100) ];
+                    pts.forEach(p => points.push(p));
+                    sticks.push(new Stick(pts[0], pts[1], 'bottom'), new Stick(pts[0], pts[2], 'bottom')); sticks.push(new Stick(pts[1], pts[3], 'bottom'), new Stick(pts[2], pts[4], 'bottom')); sticks.push(new Stick(pts[3], pts[5], 'hull'), new Stick(pts[4], pts[6], 'hull')); sticks.push(new Stick(pts[5], pts[6], 'deck')); sticks.push(new Stick(pts[1], pts[2], 'structure'), new Stick(pts[3], pts[4], 'structure')); sticks.push(new Stick(pts[0], pts[5], 'structure'), new Stick(pts[0], pts[6], 'structure')); sticks.push(new Stick(pts[1], pts[4], 'structure'), new Stick(pts[2], pts[3], 'structure')); sticks.push(new Stick(pts[5], pts[7], 'cruise_hull'), new Stick(pts[6], pts[8], 'cruise_hull')); sticks.push(new Stick(pts[7], pts[8], 'deck')); sticks.push(new Stick(pts[7], pts[9], 'cruise_hull'), new Stick(pts[8], pts[10], 'cruise_hull')); sticks.push(new Stick(pts[9], pts[10], 'deck')); sticks.push(new Stick(pts[9], pts[11], 'cruise_hull'), new Stick(pts[10], pts[12], 'cruise_hull')); sticks.push(new Stick(pts[11], pts[12], 'deck')); sticks.push(new Stick(pts[11], pts[13], 'cruise_hull'), new Stick(pts[12], pts[14], 'cruise_hull')); sticks.push(new Stick(pts[13], pts[14], 'deck')); sticks.push(new Stick(pts[5], pts[8], 'structure'), new Stick(pts[6], pts[7], 'structure')); sticks.push(new Stick(pts[7], pts[10], 'structure'), new Stick(pts[8], pts[9], 'structure')); sticks.push(new Stick(pts[9], pts[12], 'structure'), new Stick(pts[10], pts[11], 'structure')); sticks.push(new Stick(pts[11], pts[14], 'structure'), new Stick(pts[12], pts[13], 'structure'));
+                    let fL = new Point(centerX - 10, centerY - 140); let fR = new Point(centerX + 10, centerY - 140); let fTL = new Point(centerX - 10, centerY - 165); let fTR = new Point(centerX + 10, centerY - 165);
+                    points.push(fL, fR, fTL, fTR);
+                    sticks.push(new Stick(pts[13], fL, 'funnel'), new Stick(pts[14], fR, 'funnel')); sticks.push(new Stick(fL, fR, 'structure')); sticks.push(new Stick(fL, fTL, 'funnel_top'), new Stick(fR, fTR, 'funnel_top')); sticks.push(new Stick(fTL, fTR, 'funnel_top')); sticks.push(new Stick(pts[13], fR, 'structure'), new Stick(pts[14], fL, 'structure')); sticks.push(new Stick(fL, fTR, 'structure'), new Stick(fR, fTL, 'structure'));
+                    if (isRear) { let rudder = new Point(centerX, centerY + 120); let propL = new Point(centerX - 20, centerY + 80); let propR = new Point(centerX + 20, centerY + 80); points.push(rudder, propL, propR); sticks.push(new Stick(pts[0], rudder, 'bottom')); sticks.push(new Stick(pts[1], rudder, 'structure'), new Stick(pts[2], rudder, 'structure')); sticks.push(new Stick(pts[1], propL, 'structure'), new Stick(pts[2], propR, 'structure')); sticks.push(new Stick(pts[0], propL, 'structure'), new Stick(pts[0], propR, 'structure')); sticks.push(new Stick(propL, new Point(centerX-25, centerY+75), 'funnel_top')); sticks.push(new Stick(propR, new Point(centerX+25, centerY+75), 'funnel_top')); sticks.push(new Stick(rudder, new Point(centerX, centerY+125), 'funnel_top')); } 
+                    else { let mast = new Point(centerX, centerY - 220); points.push(mast); sticks.push(new Stick(pts[13], mast, 'structure'), new Stick(pts[14], mast, 'structure')); sticks.push(new Stick(pts[3], new Point(centerX - 35, centerY + 10), 'structure')); sticks.push(new Stick(pts[4], new Point(centerX + 35, centerY + 10), 'structure')); }
+                    trackNewShip(off, points.length - off);
+                } else if (type === 'liner_1910') {
+                    const len = 25; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 25, len, 'titanic'); trackNewShip(off, len * 3 + 3);
+                    [6, 12, 18].forEach(p => { if(p < len) { let b1 = points[off + p * 3 + 2], b2 = points[off + (p + 1) * 3 + 2]; let t1 = new Point(b1.x - 2, b1.y - 50), t2 = new Point(b2.x - 2, b2.y - 50); points.push(t1, t2); sticks.push(new Stick(b1, t1, 'carpathia_funnel'), new Stick(b2, t2, 'carpathia_funnel'), new Stick(t1, t2, 'funnel_top'), new Stick(b1, t2, 'structure')); } });
+                    [2, 22].forEach(p => { if(p < len) { let b = points[off + p * 3 + 2]; let t = new Point(b.x, b.y - 85); points.push(t); sticks.push(new Stick(b, t, 'structure')); let bNext = points[off + (p+1) * 3 + 2]; if(bNext) sticks.push(new Stick(bNext, t, 'structure')); } });
+                } else if (type === 'princess_alice') {
+                    const len = 16; const segW = 20; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 20, len, 'princess_alice'); trackNewShip(off, len * 3 + 3);
+                    let mid = Math.floor(len/2); let paddleCenter = points[off + mid * 3 + 2];
+                    [mid - 2, mid + 2].forEach(p => { if(p < len && p >= 0) { let b1 = points[off + p * 3 + 2]; let t1 = new Point(b1.x, b1.y - 45); points.push(t1); sticks.push(new Stick(b1, t1, 'funnel')); let bNext = points[off + (p+1) * 3 + 2]; if (bNext) sticks.push(new Stick(bNext, t1, 'structure')); } });
+                    let pbL = new Point(paddleCenter.x - 15, paddleCenter.y - 15); let pbR = new Point(paddleCenter.x + 15, paddleCenter.y - 15); let pbT = new Point(paddleCenter.x, paddleCenter.y - 25); points.push(pbL, pbR, pbT);
+                    let pPrev = points[off+(mid-1)*3+2]; let pNext = points[off+(mid+1)*3+2];
+                    if(pPrev) sticks.push(new Stick(pPrev, pbL, 'cargo_bridge')); if(pNext) sticks.push(new Stick(pNext, pbR, 'cargo_bridge')); sticks.push(new Stick(pbL, pbT, 'cargo_bridge'), new Stick(pbR, pbT, 'cargo_bridge')); sticks.push(new Stick(paddleCenter, pbT, 'structure')); sticks.push(new Stick(paddleCenter, pbL, 'structure')); sticks.push(new Stick(paddleCenter, pbR, 'structure')); sticks.push(new Stick(pbL, pbR, 'structure')); if(pPrev) sticks.push(new Stick(pPrev, pbT, 'structure')); if(pNext) sticks.push(new Stick(pNext, pbT, 'structure'));
+                    [2, len - 2].forEach(p => { let b = points[off + p * 3 + 2]; let t = new Point(b.x, b.y - 50); points.push(t); sticks.push(new Stick(b, t, 'structure')); let bNext = points[off + (p-1) * 3 + 2]; if (bNext) sticks.push(new Stick(bNext, t, 'structure')); });
+                } else if (type === 'titanic') {
+                    const len = 22; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 25, len, 'titanic'); trackNewShip(off, len * 3 + 3);
+                    [6,10,14,18].forEach(p=>{if(p<len){let b1=points[off+p*3+2],b2=points[off+(p+1)*3+2];let t1=new Point(b1.x-3,b1.y-35),t2=new Point(b2.x-3,b2.y-35);points.push(t1,t2);sticks.push(new Stick(b1,t1,'funnel'),new Stick(b2,t2,'funnel'),new Stick(t1,t2,'funnel_top'),new Stick(b1,t2,'structure'));}});
+                } else if (type === 'ss_nomadic') {
+                    const len = 12; const segW = 20; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 20, len, 'ss_nomadic'); trackNewShip(off, len * 3 + 3);
+                    [4, 7].forEach(p => { let b1 = points[off + p * 3 + 2]; let b2 = points[off + (p + 1) * 3 + 2]; let t1 = new Point(b1.x - 2, b1.y - 35); let t2 = new Point(b2.x - 2, b2.y - 35); points.push(t1, t2); sticks.push(new Stick(b1, t1, 'funnel'), new Stick(b2, t2, 'funnel'), new Stick(t1, t2, 'funnel_top'), new Stick(b1, t2, 'structure')); });
+                    [3, 5, 8].forEach(p => { let mb = points[off + p * 3 + 2]; let mt = new Point(mb.x, mb.y - 18); points.push(mt); sticks.push(new Stick(mb, mt, 'structure')); });
+                } else if (type === 'ss_atlantic') {
+                    const len = 20; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 25, len, 'ss_atlantic'); trackNewShip(off, len * 3 + 3);
+                    let mid = Math.floor(len/2); let b1=points[off+mid*3+2],b2=points[off+(mid+1)*3+2]; let t1=new Point(b1.x-3,b1.y-40),t2=new Point(b2.x-3,b2.y-40); points.push(t1,t2); sticks.push(new Stick(b1,t1,'funnel'),new Stick(b2,t2,'funnel'),new Stick(t1,t2,'funnel_top'),new Stick(b1,t2,'structure'));
+                    [3, 7, 13, 17].forEach(p=>{if(p<len){let mb=points[off+p*3+2];let mt=new Point(mb.x, mb.y-70);points.push(mt);sticks.push(new Stick(mb,mt,'structure'));}});
+                } else if (type === 'lusitania') {
+                    const len = 21; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 25, len, 'lusitania'); trackNewShip(off, len * 3 + 3);
+                    [5,9,13,17].forEach(p=>{if(p<len){let b1=points[off+p*3+2],b2=points[off+(p+1)*3+2];let t1=new Point(b1.x-3,b1.y-35),t2=new Point(b2.x-3,b2.y-35);points.push(t1,t2);sticks.push(new Stick(b1,t1,'funnel'),new Stick(b2,t2,'funnel'),new Stick(t1,t2,'funnel_top'),new Stick(b1,t2,'structure'));}});
+                } else if (type === 'carpathia') {
+                    const len = 18; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 25, len, 'carpathia'); trackNewShip(off, len * 3 + 3);
+                    let mid = Math.floor(len/2); let b1=points[off+mid*3+2],b2=points[off+(mid+1)*3+2]; let t1=new Point(b1.x-3,b1.y-35),t2=new Point(b2.x-3,b2.y-35); points.push(t1,t2); sticks.push(new Stick(b1,t1,'carpathia_funnel'),new Stick(b2,t2,'carpathia_funnel'),new Stick(t1,t2,'funnel_top'),new Stick(b1,t2,'structure'));
+                    [4, 7, 11, 14].forEach(p=>{if(p<len){let mb=points[off+p*3+2];let mt=new Point(mb.x, mb.y-60);points.push(mt);sticks.push(new Stick(mb,mt,'structure'));}});
+                } else if (type === 'californian') {
+                    const len = 19; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 25, len, 'californian'); trackNewShip(off, len * 3 + 3);
+                    let mid = Math.floor(len/2); let b1=points[off+mid*3+2],b2=points[off+(mid+1)*3+2]; let t1=new Point(b1.x-3,b1.y-35),t2=new Point(b2.x-3,b2.y-35); points.push(t1,t2); sticks.push(new Stick(b1,t1,'californian_funnel'),new Stick(b2,t2,'californian_funnel'),new Stick(t1,t2,'funnel_top'),new Stick(b1,t2,'structure'));
+                    [3, 6, 12, 15].forEach(p=>{if(p<len){let mb=points[off+p*3+2];let mt=new Point(mb.x, mb.y-60);points.push(mt);sticks.push(new Stick(mb,mt,'structure'));}});
+                } else if (type === 'queen_mary') {
+                    const len = 28; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 30, len, 'queen_mary'); trackNewShip(off, len * 3 + 3);
+                    [5, 12, 19].forEach(p=>{if(p<len){let b1=points[off+p*3+2],b2=points[off+(p+1)*3+2];let t1=new Point(b1.x-3,b1.y-40),t2=new Point(b2.x-3,b2.y-40);points.push(t1,t2);sticks.push(new Stick(b1,t1,'queen_funnel'),new Stick(b2,t2,'queen_funnel'),new Stick(t1,t2,'funnel_top'),new Stick(b1,t2,'structure'));}});
+                } else if (type === 'qm2') {
+                    const len = 32; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 30, len, 'qm2'); trackNewShip(off, len * 3 + 3);
+                    let mid = Math.floor(len/2); let b1=points[off+mid*3+2],b2=points[off+(mid+2)*3+2]; let t1=new Point(b1.x-3,b1.y-40),t2=new Point(b2.x-3,b2.y-40); points.push(t1,t2); sticks.push(new Stick(b1,t1,'qm2_funnel'),new Stick(b2,t2,'qm2_funnel'),new Stick(t1,t2,'funnel_top'),new Stick(b1,t2,'structure'));
+                } else if (type === 'bitanic') {
+                    const len = 24; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 25, len, 'bitanic'); trackNewShip(off, len * 3 + 3);
+                    [5,9,13,17].forEach(p=>{if(p<len){let b1=points[off+p*3+2],b2=points[off+(p+1)*3+2];let t1=new Point(b1.x-3,b1.y-35),t2=new Point(b2.x-3,b2.y-35);points.push(t1,t2);sticks.push(new Stick(b1,t1,'funnel'),new Stick(b2,t2,'funnel'),new Stick(t1,t2,'funnel_top'),new Stick(b1,t2,'structure'));}});
+                } else if (type === 'cruise') {
+                    const len = 35; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 30, len, 'cruise'); trackNewShip(off, len * 3 + 3);
+                    let poolStart = 15; let p1 = points[points.length - (len - poolStart)*2]; if(p1) { let p2 = new Point(p1.x + 100, p1.y); points.push(p2); sticks.push(new Stick(p1, p2, 'cruise_pool')); }
+                } else if (type === 'warship') {
+                    const len = 30; const segW = 20; let startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 20, len, 'warship'); trackNewShip(off, len * 3 + 3);
+                    let m1 = points[off + 10 * 3 + 2]; let m2 = points[off + 18 * 3 + 2]; let bTop1 = new Point(m1.x + 10, m1.y - 50); let bTop2 = new Point(m2.x - 10, m2.y - 40); points.push(bTop1, bTop2); sticks.push(new Stick(m1, bTop1, 'war_tower'), new Stick(m2, bTop2, 'war_tower'), new Stick(bTop1, bTop2, 'war_deck'), new Stick(m1, bTop2, 'structure')); let radar = new Point((bTop1+bTop2.x)/2, bTop1.y - 40); points.push(radar); sticks.push(new Stick(bTop1, radar, 'structure'), new Stick(bTop2, radar, 'structure')); let fG1 = points[off + 24 * 3 + 2]; let fG2 = points[off + 26 * 3 + 2]; let fGtL = new Point(fG1.x+5, fG1.y-12); let fGtR = new Point(fG2.x-5, fG2.y-12); let fBarrel = new Point(fGtR.x + 40, fGtR.y + 2); points.push(fGtL, fGtR, fBarrel); sticks.push(new Stick(fG1,fGtL,'war_tower'), new Stick(fG2,fGtR,'war_tower'), new Stick(fGtL,fGtR,'war_tower')); sticks.push(new Stick(fGtR, fBarrel, 'war_tower'), new Stick(fGtL, fBarrel, 'war_tower')); let rG1 = points[off + 4 * 3 + 2]; let rG2 = points[off + 6 * 3 + 2]; let rGtL = new Point(rG1.x+5, rG1.y-12); let rGtR = new Point(rG2.x-5, rG2.y-12); let rBarrel = new Point(rGtL.x - 40, rGtL.y + 2); points.push(rGtL, rGtR, rBarrel); sticks.push(new Stick(rG1,rGtL,'war_tower'), new Stick(rG2,rGtR,'war_tower'), new Stick(rGtL,rGtR,'war_tower')); sticks.push(new Stick(rGtL, rBarrel, 'war_tower'), new Stick(rGtR, rBarrel, 'war_tower'));
+                } else if (type === 'ss_united_states') {
+                    const len = 36; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 25, len, 'ss_united_states'); trackNewShip(off, len * 3 + 3);
+                    [11, 23].forEach(p => { let b1 = points[off + p * 3 + 2]; let b2 = points[off + (p + 1) * 3 + 2]; let t1 = new Point(b1.x - 5, b1.y - 55); let t2 = new Point(b2.x - 5, b2.y - 55); points.push(t1, t2); sticks.push(new Stick(b1, t1, 'us_funnel')); sticks.push(new Stick(b2, t2, 'us_funnel')); sticks.push(new Stick(t1, t2, 'us_top')); sticks.push(new Stick(b1, t2, 'structure')); });
+                    for(let i=14; i<20; i+=2) { let b = points[off + i * 3 + 2]; let t = new Point(b.x, b.y - 20); points.push(t); sticks.push(new Stick(b, t, 'structure')); if(i>14) sticks.push(new Stick(t, points[points.length-2], 'deck')); }
+                } else if (type === 'pirate') {
+                    const len = 18; const segW = 25; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 20, len, 'pirate'); trackNewShip(off, len * 3 + 3);
+                    [6,12].forEach(p=>{let b=points[off+p*3+2],t=new Point(b.x,b.y-120),m=new Point(b.x,b.y-60);points.push(t,m);sticks.push(new Stick(b,m,'pirate_mast'),new Stick(m,t,'pirate_mast'));let sl=new Point(m.x-40,m.y+20),sr=new Point(m.x+40,m.y+20);points.push(sl,sr);sticks.push(new Stick(t,sl,'structure','#ecf0f1'),new Stick(t,sr,'structure','#ecf0f1'),new Stick(sl,m,'structure','#ecf0f1'),new Stick(sr,m,'structure','#ecf0f1'));});
+                } else if (type === 'fishing') {
+                    const len = 10; const segW = 20; startX = centerX - (len * segW) / 2; const offset = createShipBase(startX, centerY, segW, 20, len, 'fishing'); trackNewShip(offset, len * 3 + 3);
+                    let cabStart = 2; let cabLen = 4; for(let i=0; i<cabLen; i++) { let deck1 = points[offset + (cabStart+i)*3 + 2]; let deck2 = points[offset + (cabStart+i+1)*3 + 2]; let c1 = new Point(deck1.x, deck1.y - 25); let c2 = new Point(deck2.x, deck2.y - 25); points.push(c1, c2); sticks.push(new Stick(deck1, c1, 'fishing_cabin'), new Stick(deck2, c2, 'fishing_cabin'), new Stick(c1, c2, 'fishing_cabin'), new Stick(deck1, c2, 'structure')); } let mastBase = points[offset + 7 * 3 + 2]; let mastTop = new Point(mastBase.x, mastBase.y - 60); let netEnd = new Point(mastBase.x + 40, mastBase.y - 30); points.push(mastTop, netEnd); sticks.push(new Stick(mastBase, mastTop, 'fishing_cabin'), new Stick(mastTop, netEnd, 'structure'), new Stick(mastBase, netEnd, 'structure'));
+                } else if (type === 'aircraft_carrier') {
+                    const len = 60; const segW = 20; let startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 20, len, 'carrier'); trackNewShip(off, len * 3 + 3);
+                    let islandStart = 45; let islandW = 5; let b1 = points[off + islandStart * 3 + 2]; let b2 = points[off + (islandStart + islandW) * 3 + 2]; let t1 = new Point(b1.x + 5, b1.y - 50); let t2 = new Point(b2.x - 5, b2.y - 50); let t3 = new Point(b1.x + 10, b1.y - 70); let t4 = new Point(b2.x - 10, b2.y - 70); points.push(t1, t2, t3, t4); sticks.push(new Stick(b1, t1, 'war_tower'), new Stick(b2, t2, 'war_tower'), new Stick(t1, t2, 'war_tower'), new Stick(b1, t2, 'structure'), new Stick(t1, t3, 'war_tower'), new Stick(t2, t4, 'war_tower'), new Stick(t3, t4, 'structure'));
+                    for(let i=5; i<len-5; i+=4) { let d1 = points[off + i * 3 + 2]; let d2 = points[off + (i+2) * 3 + 2]; sticks.push(new Stick(d1, d2, 'carrier_stripe')); }
+                } else if (type === 'plane') {
+                    const sx=centerX, sy=centerY; const off=points.length;
+                    let nose = new Point(sx + 30, sy); let cockpit = new Point(sx + 10, sy - 10); let tailTop = new Point(sx - 35, sy - 25); let tailBot = new Point(sx - 35, sy); let belly = new Point(sx, sy + 5); let wingTip = new Point(sx - 10, sy + 5); 
+                    let p = [nose, cockpit, tailTop, tailBot, belly]; p.forEach(pt => pt.isPlane = true); points.push(...p);
+                    sticks.push(new Stick(nose, cockpit, 'jet_body'), new Stick(cockpit, tailTop, 'jet_body'), new Stick(tailTop, tailBot, 'jet_body'), new Stick(tailBot, belly, 'jet_dark'), new Stick(belly, nose, 'jet_body'), new Stick(cockpit, tailBot, 'structure'), new Stick(belly, cockpit, 'structure'));
+                    let wingFront = new Point(sx + 5, sy + 2); let wingBack = new Point(sx - 15, sy + 2); let wingLow = new Point(sx - 5, sy + 15); [wingFront, wingBack, wingLow].forEach(pt => { pt.isPlane = true; points.push(pt); });
+                    sticks.push(new Stick(wingFront, wingLow, 'jet_dark'), new Stick(wingBack, wingLow, 'jet_dark'), new Stick(wingFront, wingBack, 'jet_body')); trackNewShip(off, points.length - off);
+                } else if (type === 'edmund_fitzgerald') {
+                    const len = 38; const segW = 20; let startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 25, len, 'edmund_fitzgerald'); trackNewShip(off, len * 3 + 3);
+                    let aftStart = 2; let aftW = 5; let a1 = points[off + aftStart * 3 + 2]; let a2 = points[off + (aftStart + aftW) * 3 + 2]; let ah1 = new Point(a1.x, a1.y - 30); let ah2 = new Point(a2.x, a2.y - 30); points.push(ah1, ah2); sticks.push(new Stick(a1, ah1, 'cargo_bridge'), new Stick(a2, ah2, 'cargo_bridge'), new Stick(ah1, ah2, 'deck'), new Stick(a1, ah2, 'structure')); let f1 = new Point(ah1.x + 20, ah1.y - 40); let f2 = new Point(ah2.x - 20, ah2.y - 40); points.push(f1, f2); sticks.push(new Stick(ah1, f1, 'funnel'), new Stick(ah2, f2, 'funnel'), new Stick(f1, f2, 'funnel_top'), new Stick(ah1, f2, 'structure')); let bowStart = len - 6; let bowW = 4; let b1 = points[off + bowStart * 3 + 2]; let b2 = points[off + (bowStart + bowW) * 3 + 2]; let bh1 = new Point(b1.x, b1.y - 25); let bh2 = new Point(b2.x, b2.y - 25); let bh3 = new Point(b1.x + 5, b1.y - 45); let bh4 = new Point(b2.x - 5, b2.y - 45); points.push(bh1, bh2, bh3, bh4); sticks.push(new Stick(b1, bh1, 'cargo_bridge'), new Stick(b2, bh2, 'cargo_bridge'), new Stick(bh1, bh2, 'deck')); sticks.push(new Stick(bh1, bh3, 'cargo_bridge'), new Stick(bh2, bh4, 'cargo_bridge'), new Stick(bh3, bh4, 'deck')); sticks.push(new Stick(b1, bh2, 'structure'), new Stick(bh1, bh4, 'structure'));
+                } else if (type === 'dreadnought') {
+                    const len = 28; const segW = 20; startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 20, len, 'dreadnought'); trackNewShip(off, len * 3 + 3);
+                    [10, 16].forEach(p => { let b1 = points[off + p * 3 + 2]; let b2 = points[off + (p + 1) * 3 + 2]; let t1 = new Point(b1.x, b1.y - 40); let t2 = new Point(b2.x, b2.y - 40); points.push(t1, t2); sticks.push(new Stick(b1, t1, 'war_tower'), new Stick(b2, t2, 'war_tower'), new Stick(t1, t2, 'war_tower'), new Stick(b1, t2, 'structure')); });
+                    let mBase1 = points[off + 13 * 3 + 2]; let mBase2 = points[off + 14 * 3 + 2]; let mastTop = new Point((mBase1.x + mBase2.x) / 2, mBase1.y - 100); let lookout = new Point(mastTop.x, mastTop.y + 20); points.push(mastTop, lookout); sticks.push(new Stick(mBase1, mastTop, 'structure'), new Stick(mBase2, mastTop, 'structure'), new Stick(mBase1, mBase2, 'deck'));
+                    [6, 20].forEach(p => { let b1 = points[off + p * 3 + 2]; let b2 = points[off + (p + 1) * 3 + 2]; let t1 = new Point(b1.x + 5, b1.y - 15); let t2 = new Point(b2.x - 5, b2.y - 15); points.push(t1, t2); sticks.push(new Stick(b1, t1, 'war_tower'), new Stick(b2, t2, 'war_tower'), new Stick(t1, t2, 'war_tower'), new Stick(b1, t2, 'structure')); let dir = p < 14 ? -1 : 1; let barrelTip = new Point((t1.x + t2.x)/2 + (30 * dir), t1.y + 2); points.push(barrelTip); sticks.push(new Stick(t1, barrelTip, 'war_tower'), new Stick(t2, barrelTip, 'war_tower')); });
+                } else if (type === 'pns_yamama') {
+                    const len = 26; const segW = 20; let startX = centerX - (len * segW) / 2; const off = createShipBase(startX, centerY, segW, 20, len, 'pns_yamama'); trackNewShip(off, len * 3 + 3);
+                    let s1 = points[off + 6 * 3 + 2]; let s2 = points[off + 18 * 3 + 2]; let top1 = new Point(s1.x + 20, s1.y - 45); let top2 = new Point(s2.x - 30, s2.y - 45); points.push(top1, top2); sticks.push(new Stick(s1, top1, 'pns_structure'), new Stick(s2, top2, 'pns_structure'), new Stick(top1, top2, 'pns_deck'), new Stick(s1, top2, 'structure')); let mBase = new Point((top1.x+top2.x)/2, top1.y); let mastTop = new Point(mBase.x, mBase.y - 40); points.push(mBase, mastTop); sticks.push(new Stick(top1, mastTop, 'pns_structure'), new Stick(top2, mastTop, 'pns_structure')); let g1 = points[off + 21 * 3 + 2]; let g2 = points[off + 23 * 3 + 2]; let gTop = new Point((g1.x+g2.x)/2, g1.y - 12); let barrel = new Point(gTop.x + 25, gTop.y + 2); points.push(gTop, barrel); sticks.push(new Stick(g1, gTop, 'pns_structure'), new Stick(g2, gTop, 'pns_structure'), new Stick(gTop, barrel, 'pns_structure'), new Stick(g1, barrel, 'structure'));
+                }
+            }
+            const endLen = points.length; const newShipId = getNextShipId(); for (let i = startLen; i < endLen; i++) { points[i].shipId = newShipId; }
+        }
+
+        function spawnIcebergAt(cx, cy) { let ice=[]; let r=40; for(let i=0;i<6;i++){let a=(i/6)*Math.PI*2;let p=new Point(cx+Math.cos(a)*r,cy+Math.sin(a)*r);p.isIce=true;p.mass=3;p.radius=10;ice.push(p);}points.push(...ice);for(let i=0;i<ice.length;i++)for(let j=i+1;j<ice.length;j++)sticks.push(new Stick(ice[i],ice[j],'ice')); }
+        function spawnRockAt(cx, cy) { let p=[new Point(cx-20,cy-20),new Point(cx+20,cy-20),new Point(cx+20,cy+20),new Point(cx-20,cy+20)];p.forEach(pt=>{pt.isRock=true;pt.mass=8;pt.radius=8;});points.push(...p);sticks.push(new Stick(p[0],p[1],'rock'),new Stick(p[1],p[2],'rock'),new Stick(p[2],p[3],'rock'),new Stick(p[3],p[0],'rock'),new Stick(p[0],p[2],'rock')); }
+
+        function resize() { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; updateSeaLevel(seaLevelSetting); baseSandLevel = height * 0.9; }
+        
+        function update() {
+            if (currentMode === 'builder') return; // Sem física no construtor
+
+            wavePhase += waveSpeed; 
+            projectiles.forEach((p, i) => { p.update(); if(!p.active) projectiles.splice(i,1); }); 
+            
+            if (isStormActive) { if (Math.random() < 0.8) rainDrops.push({ x: (camera.x * -1) + Math.random() * (width/camera.scale), y: (camera.y * -1) - 50, vx: -2, vy: 15 }); if (Math.random() < 0.01) triggerLightning(); } 
+            for (let i = rainDrops.length - 1; i >= 0; i--) { let r = rainDrops[i]; r.x += r.vx; r.y += r.vy; if (r.y > getWaterHeightAt(r.x)) rainDrops.splice(i, 1); } 
+            
+            if (enableDecay && decayQueue.length > 0) { if (Date.now() - lastDecayTime > 100) { let stickToRemove = decayQueue.shift(); if (stickToRemove && stickToRemove.active) stickToRemove.active = false; lastDecayTime = Date.now(); } } 
+            
+            for (let p of points) p.update(); 
+            for (let j = 0; j < 5; j++) { 
+                checkCollisions(); 
+                for (let i = sticks.length - 1; i >= 0; i--) { if (!sticks[i].active) { sticks.splice(i, 1); continue; } sticks[i].update(); } 
+            } 
+            
+            if (isMouseDown) { 
+                let worldPos = toWorld(mouseX, mouseY);
+                if (currentTool.startsWith('custom_tool_')) { let toolInfo = customToolsPool[currentTool]; if (toolInfo && toolInfo.type === 'hold') { try { toolInfo.func(worldPos, points, sticks, projectiles, ctx, wavePhase); } catch(e) {} } }
+
+                if (currentTool === 'drag' && draggedPoint) { draggedPoint.x = worldPos.x; draggedPoint.y = worldPos.y; draggedPoint.oldx = worldPos.x; draggedPoint.oldy = worldPos.y; if(!draggedPoint.isPlane) draggedPoint.isLeaking = false; } 
+                if (currentTool === 'tornado') { let r=150; points.forEach(p => { let dx=p.x-worldPos.x; let dy=p.y-worldPos.y; if(Math.sqrt(dx*dx+dy*dy)<r && !p.pinned) { let a=Math.atan2(dy,dx); p.x-=Math.sin(a)*5; p.y+=Math.cos(a)*5; p.y-=2; } }); } 
+                if (currentTool === 'whirlpool') { let r=200; points.forEach(p => { let dx=p.x-worldPos.x; let dy=p.y-worldPos.y; if(Math.sqrt(dx*dx+dy*dy)<r && !p.pinned) { let a=Math.atan2(dy,dx); p.x+=Math.sin(a)*5; p.y-=Math.cos(a)*5; p.x-=dx*0.05; p.y+=2; } }); } 
+                if (currentTool === 'raise_terrain' || currentTool === 'lower_terrain') { let radius = 100; let force = currentTool === 'raise_terrain' ? -5 : 5; let startIdx = Math.floor((worldPos.x - radius) / 25) * 25; let endIdx = Math.ceil((worldPos.x + radius) / 25) * 25; for (let i = startIdx; i <= endIdx; i += 25) { let dx = i - worldPos.x; if (Math.abs(dx) < radius) { let effect = Math.cos((dx / radius) * (Math.PI / 2)); if (modifiedTerrain[i] === undefined) { modifiedTerrain[i] = getDefaultTerrainHeightAt(i); } modifiedTerrain[i] += force * effect; } } }
+                if (currentTool === 'blackhole') { let bhPower = 1200; points.forEach(p => { if (!p.pinned) { let dx = worldPos.x - p.x; let dy = worldPos.y - p.y; let dist = Math.sqrt(dx*dx + dy*dy); if (dist > 2 && dist < 1500) { let force = bhPower / Math.max(dist, 20); p.x += (dx / dist) * Math.min(force, 30); p.y += (dy / dist) * Math.min(force, 30); let rotForce = force * 0.4; p.x += (dy / dist) * rotForce; p.y -= (dx / dist) * rotForce; if (dist < 30) p.isLeaking = true; } } }); sticks.forEach(s => { if (s.active) { let mx = (s.p1.x + s.p2.x)/2; let my = (s.p1.y + s.p2.y)/2; if (Math.hypot(mx-worldPos.x, my-worldPos.y) < 40) s.break(); } }); projectiles.forEach(proj => { let dx = worldPos.x - proj.p.x; let dy = worldPos.y - proj.p.y; let dist = Math.hypot(dx, dy); if (dist < 1500) { proj.p.x += (dx/dist)*20; proj.p.y += (dy/dist)*20; if(dist < 30) proj.active = false; } }); }
+                if (currentTool === 'fire') { points.forEach(p => { if(Math.hypot(p.x-worldPos.x,p.y-worldPos.y)<30) p.fireValue=100; }); } 
+                if (currentTool === 'sand' && Math.random()<0.2) { let p=new Point(worldPos.x+(Math.random()-0.5)*10,worldPos.y+(Math.random()-0.5)*10,true); points.push(p); if(points.length>2) sticks.push(new Stick(p,points[points.length-2],'sand_ground')); } 
+                if (currentTool === 'cut') { for (let s of sticks) { if (!s.active) continue; if (Math.hypot((s.p1.x+s.p2.x)/2-worldPos.x,(s.p1.y+s.p2.y)/2-worldPos.y)<15/camera.scale) s.break(); } }
+            } 
+        }
+
+        function draw() { 
+            ctx.clearRect(0, 0, width, height); 
+            
+            if (currentMode === 'builder') {
+                ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, width, height);
+                ctx.save(); ctx.translate(camera.x, camera.y); ctx.scale(camera.scale, camera.scale);
+                
+                // Draw Grid (Blueprint style)
+                let left = -camera.x / camera.scale; let right = left + width / camera.scale;
+                let top = -camera.y / camera.scale; let bottom = top + height / camera.scale;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'; ctx.lineWidth = 1;
+                ctx.beginPath();
+                for(let x = Math.floor(left/20)*20; x < right; x += 20) { ctx.moveTo(x, top); ctx.lineTo(x, bottom); }
+                for(let y = Math.floor(top/20)*20; y < bottom; y += 20) { ctx.moveTo(left, y); ctx.lineTo(right, y); }
+                ctx.stroke();
+
+                for (let s of sticks) s.draw(); 
+                
+                // Draw Points more visibly in builder
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                for (let p of points) { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fill(); }
+
+                if (builderStartPoint && isMouseDown && builderTool === 'add_stick') {
+                    let rawWp = toWorld(mouseX, mouseY);
+                    let near = getNearestPoint(rawWp, 25/camera.scale);
+                    let target = near ? near : rawWp;
+                    
+                    ctx.strokeStyle = 'rgba(46, 204, 113, 0.8)'; ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.moveTo(builderStartPoint.x, builderStartPoint.y); ctx.lineTo(target.x, target.y); ctx.stroke();
+                }
+
+                ctx.restore();
+            } else {
+                ctx.fillStyle = COLOR_SKY; ctx.fillRect(0, 0, width, height); 
+                ctx.save(); ctx.translate(camera.x, camera.y); ctx.scale(camera.scale, camera.scale); 
+                
+                const gradWater = ctx.createLinearGradient(0, waterLevel, 0, baseSandLevel + 2000); 
+                gradWater.addColorStop(0, COLOR_WATER_TOP); gradWater.addColorStop(1, COLOR_WATER_BOTTOM); 
+                ctx.fillStyle = gradWater; ctx.beginPath(); 
+                let sx=-width/camera.scale-camera.x - 200; let ex=width/camera.scale-camera.x + width + 200; 
+                ctx.moveTo(sx, baseSandLevel + 2000); ctx.lineTo(sx, getWaterHeightAt(sx)); 
+                for (let x=sx; x<=ex; x+=40) ctx.lineTo(x, getWaterHeightAt(x)); 
+                ctx.lineTo(ex, baseSandLevel + 2000); ctx.fill(); 
+
+                const gradSand = ctx.createLinearGradient(0, baseSandLevel, 0, baseSandLevel + 2000); 
+                gradSand.addColorStop(0, COLOR_SAND); gradSand.addColorStop(1, COLOR_SAND_DARK); 
+                ctx.fillStyle = gradSand; ctx.beginPath();
+                let startXAligned = Math.floor(sx / 25) * 25; ctx.moveTo(startXAligned, baseSandLevel + 2500); 
+                for (let x = startXAligned; x <= ex + 25; x += 25) { ctx.lineTo(x, getTerrainHeightAt(x)); }
+                ctx.lineTo(ex + 25, baseSandLevel + 2500); ctx.fill();
+
+                ctx.strokeStyle = 'rgba(200, 200, 255, 0.4)'; ctx.lineWidth = 1; ctx.beginPath(); 
+                rainDrops.forEach(r => { ctx.moveTo(r.x, r.y); ctx.lineTo(r.x + r.vx, r.y + r.vy); }); ctx.stroke(); 
+                
+                for (let s of sticks) s.draw(); 
+                for (let p of projectiles) p.draw(); 
+                points.forEach(p => { if(p.fireValue>10) { ctx.fillStyle=`rgba(255, ${Math.random()*200}, 0, ${p.fireValue/100})`; ctx.beginPath(); ctx.arc(p.x, p.y-Math.random()*10, Math.random()*8+2, 0, Math.PI*2); ctx.fill(); } }); 
+                
+                let wm = toWorld(mouseX, mouseY); 
+                if (isMouseDown && ['tornado', 'whirlpool', 'fire', 'explode', 'raise_terrain', 'lower_terrain'].includes(currentTool)) { ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(wm.x, wm.y, currentTool.includes('terrain') ? 100 : 30, 0, Math.PI*2); ctx.stroke(); } 
+                else if (isMouseDown && currentTool === 'blackhole') { ctx.fillStyle = '#000000'; ctx.shadowBlur = 40; ctx.shadowColor = '#8e44ad'; ctx.beginPath(); ctx.arc(wm.x, wm.y, 40, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(142, 68, 173, 0.8)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(wm.x, wm.y, 80 + Math.sin(wavePhase*10)*10, 25, wavePhase * 3, 0, Math.PI*2); ctx.stroke(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(wm.x, wm.y, 60, 15, wavePhase * -2, 0, Math.PI*2); ctx.stroke(); } 
+                else if (isMouseDown && currentTool.startsWith('custom_tool_')) { ctx.strokeStyle = 'rgba(46, 204, 113, 0.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(wm.x, wm.y, 30, 0, Math.PI*2); ctx.stroke(); }
+                ctx.restore(); 
+            }
+            requestAnimationFrame(loop); 
+        }
+        function loop() { update(); draw(); }
+        
+        // --- EVENTOS DE MOUSE ---
+        function handleMouseDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
+            let wp = toWorld(mouseX, mouseY);
+
+            if (currentMode === 'builder') {
+                if (e.target.closest('.builder-toolbar') || e.target.closest('.builder-topbar')) return;
+                isMouseDown = true;
+                
+                let rawWp = { x: wp.x, y: wp.y }; // Posição pura para buscas (selecionar, apagar, pintar)
+                let snap = document.getElementById('builderGridSnap').checked;
+                let snappedWp = { 
+                    x: snap ? Math.round(rawWp.x/20)*20 : rawWp.x, 
+                    y: snap ? Math.round(rawWp.y/20)*20 : rawWp.y 
+                }; // Posição travada na grade para criações
+                
+                if (builderTool === 'camera') { mousePanStart = { x: mouseX, y: mouseY }; } 
+                else if (builderTool === 'add_point') { let near = getNearestPoint(rawWp, 15/camera.scale); if (!near) points.push(new Point(snappedWp.x, snappedWp.y)); } 
+                else if (builderTool === 'add_stick') { let near = getNearestPoint(rawWp, 25/camera.scale); if (near) builderStartPoint = near; } 
+                else if (builderTool === 'move_point') { let near = getNearestPoint(rawWp, 20/camera.scale); if (near) draggedPoint = near; } 
+                else if (builderTool === 'move_ship') { mousePanStart = { x: snappedWp.x, y: snappedWp.y }; } 
+                else if (builderTool === 'delete') {
+                    let nearP = getNearestPoint(rawWp, 15/camera.scale);
+                    if (nearP) {
+                        points = points.filter(p => p !== nearP);
+                        sticks = sticks.filter(s => s.p1 !== nearP && s.p2 !== nearP);
+                    } else {
+                        let nearS = getNearestStick(rawWp, 15/camera.scale);
+                        if (nearS) sticks = sticks.filter(s => s !== nearS);
+                    }
+                } 
+                else if (builderTool === 'paint') {
+                    let nearS = getNearestStick(rawWp, 15/camera.scale);
+                    if (nearS) {
+                        let type = document.getElementById('builderStickType').value;
+                        let color = document.getElementById('builderColorPicker').value;
+                        nearS.type = type;
+                        nearS.colorStr = (type === 'custom') ? color : null;
+                    }
+                }
+                return;
+            }
+
+            // Sandbox MouseDown
+            if (e.target.closest('#thrust-menu') === null && e.target.closest('.ui-bar') === null && e.target.closest('.popup-menu') === null && e.target.closest('#custom-tools-hotbar') === null) { document.querySelectorAll('.popup-menu').forEach(m => m.style.display = 'none'); } else if (e.target.closest('.popup-menu') !== null || e.target.closest('.ui-bar') !== null || e.target.closest('#custom-tools-hotbar') !== null) { return; }
+            isMouseDown = true;
+            if (currentTool === 'place' && pendingSpawnType) { createShip(pendingSpawnType, wp.x, wp.y); pendingSpawnType = null; setTool('drag'); return; }
+            if (currentTool.startsWith('custom_tool_')) { let toolInfo = customToolsPool[currentTool]; if (toolInfo && toolInfo.type === 'click') { try { toolInfo.func(wp, points, sticks, projectiles, ctx, wavePhase); } catch(err) {} return; } }
+            if (['meteor', 'iceberg', 'rock', 'sink', 'explode'].includes(currentTool)) {
+                if (currentTool === 'meteor') { projectiles.push(new Projectile(wp.x-200, -500, -10, -20, 'meteor')); let p = projectiles[projectiles.length-1].p; p.x = wp.x-100; p.y = wp.y-600; p.oldx = wp.x-100-8; p.oldy = wp.y-600-15; } 
+                if (currentTool === 'iceberg') spawnIcebergAt(wp.x, wp.y); 
+                if (currentTool === 'rock') spawnRockAt(wp.x, wp.y); 
+                if (currentTool === 'sink') { for(let p of points) if(Math.hypot(p.x-wp.x,p.y-wp.y)<50) { p.isLeaking=true; p.leakRate=0.05; } } 
+                if (currentTool === 'explode') { points.forEach(p => { if(Math.hypot(p.x-wp.x,p.y-wp.y)<100) { let a=Math.atan2(p.y-wp.y,p.x-wp.x); if(!p.pinned){p.x+=Math.cos(a)*50;p.y+=Math.sin(a)*50;p.isLeaking=true;} } }); sticks.forEach(s => { if(Math.hypot((s.p1.x+s.p2.x)/2-wp.x,(s.p1.y+s.p2.y)/2-wp.y)<100) s.break(); }); }
+                mousePanStart = null; draggedPoint = null;
+            }
+            if (['cut', 'fire', 'tornado', 'whirlpool', 'sand', 'blackhole', 'raise_terrain', 'lower_terrain'].includes(currentTool)) { mousePanStart = null; draggedPoint = null; }
+            else if (currentTool === 'drag') {
+                let minD = 40 / camera.scale; let near = null; 
+                for(let p of points){ let d = Math.hypot(p.x - wp.x, p.y - wp.y); if(d < minD){ minD = d; near = p; } } 
+                if (near) { draggedPoint = near; mousePanStart = null; } else { mousePanStart = { x: mouseX, y: mouseY }; draggedPoint = null; } 
+            }
+        }
+
+        function handleMouseMove(e) {
+            const rect = canvas.getBoundingClientRect(); mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
+            let wp = toWorld(mouseX, mouseY);
+            
+            if (currentMode === 'builder') {
+                let rawWp = { x: wp.x, y: wp.y };
+                let snap = document.getElementById('builderGridSnap').checked;
+                let snappedWp = { 
+                    x: snap ? Math.round(rawWp.x/20)*20 : rawWp.x, 
+                    y: snap ? Math.round(rawWp.y/20)*20 : rawWp.y 
+                };
+
+                if (isMouseDown) {
+                    if (builderTool === 'camera' && mousePanStart) { const dx = mouseX - mousePanStart.x; const dy = mouseY - mousePanStart.y; camera.x += dx; camera.y += dy; mousePanStart = { x: mouseX, y: mouseY }; } 
+                    else if (builderTool === 'move_point' && draggedPoint) { draggedPoint.x = snappedWp.x; draggedPoint.y = snappedWp.y; draggedPoint.oldx = snappedWp.x; draggedPoint.oldy = snappedWp.y; } 
+                    else if (builderTool === 'move_ship' && mousePanStart) { let dx = snappedWp.x - mousePanStart.x; let dy = snappedWp.y - mousePanStart.y; points.forEach(p => { p.x += dx; p.y += dy; p.oldx = p.x; p.oldy = p.y; }); mousePanStart = { x: snappedWp.x, y: snappedWp.y }; }
+                }
+                return;
+            }
+
+            if (isMouseDown) {
+                if (draggedPoint) { /* done in update */ } 
+                else if (mousePanStart) { const dx = mouseX - mousePanStart.x; const dy = mouseY - mousePanStart.y; camera.x += dx; camera.y += dy; mousePanStart = { x: mouseX, y: mouseY }; }
+            }
+        }
+
+        function handleMouseUp(e) {
+            if (currentMode === 'builder') {
+                if (builderTool === 'add_stick' && builderStartPoint) {
+                    let rawWp = toWorld(mouseX, mouseY);
+                    let near = getNearestPoint(rawWp, 25/camera.scale);
+                    if (near && near !== builderStartPoint) {
+                        let type = document.getElementById('builderStickType').value;
+                        let color = document.getElementById('builderColorPicker').value;
+                        sticks.push(new Stick(builderStartPoint, near, type, type === 'custom' ? color : null));
+                    }
+                }
+                builderStartPoint = null; draggedPoint = null; mousePanStart = null; isMouseDown = false;
+                return;
+            }
+            isMouseDown = false; draggedPoint = null; mousePanStart = null;
+        }
+
+        function handleMouseLeave(e) { isMouseDown = false; draggedPoint = null; mousePanStart = null; builderStartPoint = null; }
+
+        function handleWheel(e) {
+            if (e.target.closest('.popup-menu') || e.target.closest('.builder-toolbar') || e.target.closest('.builder-topbar') || e.target.closest('#ui-container') || e.target.closest('#custom-tools-hotbar')) return;
+            e.preventDefault();
+            const factor = e.deltaY < 0 ? 1.1 : 0.9;
+            const rect = canvas.getBoundingClientRect(); const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
+            const wpBefore = toWorld(mx, my);
+            camera.scale = Math.min(Math.max(camera.scale * factor, camera.minScale), camera.maxScale);
+            const wpAfter = { x: (mx - camera.x) / camera.scale, y: (my - camera.y) / camera.scale };
+            camera.x += (wpAfter.x - wpBefore.x) * camera.scale; camera.y += (wpAfter.y - wpBefore.y) * camera.scale;
+        }
+
+        window.addEventListener('keydown', function(e) { if (e.key.toLowerCase() === 'x' && currentMode === 'sandbox') { const instr = document.getElementById('instructions'); instr.style.display = instr.style.display === 'none' ? 'block' : 'none'; } });
+
+        canvas.addEventListener('mousedown', handleMouseDown);
+        window.addEventListener('mousemove', handleMouseMove); 
+        window.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('mouseleave', handleMouseLeave);
+        canvas.addEventListener('wheel', handleWheel, { passive: false });
+        window.addEventListener('resize', resize);
+
+        resize();
+        loadSavedShips();
+        createShip('titanic', width/2, waterLevel-150); 
+        loop();
+    </script>
+</body>
+</html>
