@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Simulador de Destruição Planetária 2D</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #050510;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            touch-action: none; /* Previne scroll no mobile */
+        }
+        
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        #ui-layer {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between;
+            padding: 15px; box-sizing: border-box;
+        }
+
+        .panel {
+            background: rgba(15, 15, 25, 0.85);
+            padding: 15px; border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            pointer-events: auto;
+            max-width: 300px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        h1 { margin: 0 0 10px 0; font-size: 1.1rem; color: #4da6ff; text-transform: uppercase; }
+        p { margin: 4px 0; font-size: 0.85rem; color: #ccc; }
+        .highlight { color: #fff; font-weight: bold; }
+
+        .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+        
+        button {
+            background: #2a2a3a; color: white;
+            border: 1px solid #4a4a6a; padding: 8px 12px;
+            border-radius: 4px; cursor: pointer;
+            font-weight: bold; transition: background 0.2s;
+            font-size: 0.75rem; text-transform: uppercase;
+        }
+        button:hover { background: #3a3a5a; }
+        button:active { transform: translateY(1px); }
+        button.active { background: #4da6ff; color: #000; border-color: #fff; }
+
+        .toolbar-bottom {
+            display: flex; gap: 10px; justify-content: center;
+            pointer-events: auto; padding: 10px;
+            background: rgba(15, 15, 25, 0.9);
+            border-radius: 25px; align-self: center;
+            margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .tool-btn {
+            width: 45px; height: 45px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; padding: 0; background: #222; border: 2px solid transparent;
+        }
+        .tool-btn.selected {
+            border-color: #4da6ff; background: #333;
+            box-shadow: 0 0 10px rgba(77, 166, 255, 0.6);
+        }
+        .tool-btn.danger.selected {
+            border-color: #ff4d4d; box-shadow: 0 0 10px rgba(255, 77, 77, 0.6);
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="simCanvas"></canvas>
+
+    <div id="ui-layer">
+        <div class="panel">
+            <h1>Sistema Solar 2D</h1>
+            <p id="mode-text" style="color: #4da6ff; font-weight: bold;">Modo: Arraste para Mover</p>
+            <p>Corpos Celestes: <span id="body-count" class="highlight">0</span></p>
+            <p>Fragmentos: <span id="particle-count" class="highlight">0</span></p>
+            <div class="controls">
+                <button onclick="resetSystem()">Resetar</button>
+                <button onclick="togglePhysics()" id="btn-physics" class="active">Pausar Física</button>
+                <button onclick="clearDebris()">Limpar Lixo</button>
+            </div>
+        </div>
+
+        <div class="toolbar-bottom">
+            <button class="tool-btn selected" id="tool-observe" onclick="selectTool('observe')" title="Mover Câmera">🖐️</button>
+            <button class="tool-btn" id="tool-rock" onclick="selectTool('rock')" title="Arremessar Asteroide">🪨</button>
+            <button class="tool-btn" id="tool-planet" onclick="selectTool('planet')" title="Arremessar Planeta">🌍</button>
+            <button class="tool-btn danger" id="tool-blackhole" onclick="selectTool('blackhole')" title="Criar Buraco Negro">🌌</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false }); // alpha: false otimiza renderização
+
+        let width, height;
+        
+        // Estado da Simulação
+        const G = 0.5; // Constante Gravitacional Arbitrária
+        let isPhysicsRunning = true;
+        let bodies = [];
+        let debris = [];
+        let blackholes = [];
+
+        // Estado da Câmera
+        let camera = { x: 0, y: 0, zoom: 1 };
+        
+        // Estado da Interação
+        let currentTool = 'observe';
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let dragCurrent = { x: 0, y: 0 };
+        let mouseWorld = { x: 0, y: 0 };
+
+        // Cores processuais
+        const COLORS = {
+            sun: '#ffcc00', earth: '#4da6ff', moon: '#cccccc',
+            mars: '#ff5533', jupiter: '#cca37a', rock: '#888888',
+            blackhole: '#000000', disk: '#ff3300'
+        };
+
+        // Redimensionamento
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Body {
+            constructor(x, y, radius, mass, color, vx = 0, vy = 0, isSun = false) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.mass = mass;
+                this.color = color;
+                this.vx = vx;
+                this.vy = vy;
+                this.isSun = isSun;
+                this.dead = false;
+                
+                this.trail = [];
+                this.trailMax = isSun ? 0 : 50;
+            }
+
+            update(dt) {
+                if (this.dead) return;
+                
+                // O sol principal fica estático no centro para referência, a menos que sofra muito impacto
+                if (this.isSun && Math.abs(this.vx) < 0.1 && Math.abs(this.vy) < 0.1) {
+                    this.vx = 0; this.vy = 0;
+                } else {
+                    this.x += this.vx * dt;
+                    this.y += this.vy * dt;
+                }
+
+                // Rastro
+                if (this.trailMax > 0 && Math.random() < 0.3) {
+                    this.trail.push({x: this.x, y: this.y});
+                    if (this.trail.length > this.trailMax) this.trail.shift();
+                }
+            }
+
+            draw(ctx) {
+                // Desenhar Rastro
+                if (this.trail.length > 1) {
+                    ctx.beginPath();
+                    ctx.moveTo(this.trail[0].x, this.trail[0].y);
+                    for (let i = 1; i < this.trail.length; i++) {
+                        ctx.lineTo(this.trail[i].x, this.trail[i].y);
+                    }
+                    ctx.strokeStyle = this.color;
+                    ctx.lineWidth = Math.max(1, this.radius * 0.2);
+                    ctx.globalAlpha = 0.3;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
+                }
+
+                // Efeito de brilho para o sol
+                if (this.isSun) {
+                    let gradient = ctx.createRadialGradient(this.x, this.y, this.radius*0.8, this.x, this.y, this.radius * 2);
+                    gradient.addColorStop(0, this.color);
+                    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius * 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Desenhar Corpo
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        class BlackHole {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.mass = 50000;
+                this.radius = 15;
+                this.dead = false;
+                this.angle = 0;
+            }
+            update() { this.angle += 0.05; }
+            draw(ctx) {
+                // Disco de Acreção
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                
+                let gradient = ctx.createRadialGradient(0, 0, this.radius, 0, 0, this.radius * 4);
+                gradient.addColorStop(0, '#000');
+                gradient.addColorStop(0.2, COLORS.disk);
+                gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * 4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Centro Negro
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class Debris {
+            constructor(x, y, vx, vy, color, radius, mass) {
+                this.x = x; this.y = y;
+                this.vx = vx; this.vy = vy;
+                this.color = color;
+                this.radius = Math.max(0.5, radius); 
+                this.mass = mass;
+                this.dead = false;
+            }
+            update(dt) {
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+            }
+            draw(ctx) {
+                ctx.fillStyle = this.color;
+                // Quadrados renderizam muito mais rápido para centenas de partículas
+                ctx.fillRect(this.x - this.radius, this.y - this.radius, this.radius*2, this.radius*2);
+            }
+        }
+
+        function resolveBounce(a, b, restitution) {
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            let distSq = dx*dx + dy*dy;
+            if (distSq === 0) return;
+            let dist = Math.sqrt(distSq);
+
+            let nx = dx / dist;
+            let ny = dy / dist;
+
+            let rvx = b.vx - a.vx;
+            let rvy = b.vy - a.vy;
+            let velAlongNormal = rvx * nx + rvy * ny;
+
+            // Já estão se afastando
+            if (velAlongNormal > 0) return; 
+
+            let j = -(1 + restitution) * velAlongNormal;
+            j /= (1/a.mass + 1/b.mass);
+
+            let impulseX = j * nx;
+            let impulseY = j * ny;
+
+            a.vx -= impulseX / a.mass;
+            a.vy -= impulseY / a.mass;
+            b.vx += impulseX / b.mass;
+            b.vy += impulseY / b.mass;
+
+            // Correção de penetração (Evita que os fragmentos grudem ou afundem nos planetas)
+            let penetration = (a.radius + b.radius) - dist;
+            if (penetration > 0.05) {
+                let correction = penetration / (1/a.mass + 1/b.mass) * 0.8;
+                let cx = correction * nx;
+                let cy = correction * ny;
+                a.x -= cx / a.mass;
+                a.y -= cy / a.mass;
+                b.x += cx / b.mass;
+                b.y += cy / b.mass;
+            }
+        }
+
+        function calculatePhysics() {
+            if (!isPhysicsRunning) return;
+
+            // 1. Gravidade entre Buracos Negros e tudo mais
+            for (let bh of blackholes) {
+                for (let b of bodies) {
+                    if (b.dead) continue;
+                    let dx = bh.x - b.x; let dy = bh.y - b.y;
+                    let distSq = dx*dx + dy*dy;
+                    if (distSq < bh.radius * bh.radius) { b.dead = true; continue; }
+                    if (distSq > 10) {
+                        let force = (G * bh.mass * b.mass) / distSq;
+                        let dist = Math.sqrt(distSq);
+                        b.vx += (force / b.mass) * (dx / dist);
+                        b.vy += (force / b.mass) * (dy / dist);
+                    }
+                }
+            }
+
+            // 2. Gravidade e Colisão entre Corpos
+            for (let i = 0; i < bodies.length; i++) {
+                let a = bodies[i];
+                if (a.dead) continue;
+
+                for (let j = i + 1; j < bodies.length; j++) {
+                    let b = bodies[j];
+                    if (b.dead) continue;
+
+                    let dx = b.x - a.x; let dy = b.y - a.y;
+                    let distSq = dx*dx + dy*dy;
+                    let dist = Math.sqrt(distSq);
+
+                    if (dist < a.radius + b.radius) {
+                        handleCollision(a, b);
+                        continue;
+                    }
+
+                    if (distSq > 10) {
+                        let force = (G * a.mass * b.mass) / distSq;
+                        let nx = dx / dist; let ny = dy / dist;
+                        a.vx += (force / a.mass) * nx;
+                        a.vy += (force / a.mass) * ny;
+                        b.vx -= (force / b.mass) * nx;
+                        b.vy -= (force / b.mass) * ny;
+                    }
+                }
+            }
+
+            // 3. Físicas dos Detritos (Fragmentos e Anéis)
+            for (let i = 0; i < debris.length; i++) {
+                let d = debris[i];
+                if (d.dead) continue;
+
+                // Buracos Negros engolem detritos
+                for (let bh of blackholes) {
+                    let dx = bh.x - d.x; let dy = bh.y - d.y;
+                    let distSq = dx*dx + dy*dy;
+                    if (distSq < bh.radius * bh.radius) { d.dead = true; continue; }
+                    if (distSq > 10) {
+                        let force = (G * bh.mass * d.mass) / distSq;
+                        let dist = Math.sqrt(distSq);
+                        d.vx += (force / d.mass) * (dx / dist);
+                        d.vy += (force / d.mass) * (dy / dist);
+                    }
+                }
+                
+                if (d.dead) continue;
+
+                // Gravidade e Colisão com Planetas/Sol (Para formar anéis)
+                for (let b of bodies) {
+                    if (b.dead) continue;
+                    let dx = b.x - d.x; let dy = b.y - d.y;
+                    let distSq = dx*dx + dy*dy;
+                    let dist = Math.sqrt(distSq);
+
+                    // Colisão suave: perdem força e começam a orbitar em círculos
+                    if (dist < b.radius + d.radius) {
+                        resolveBounce(d, b, 0.2); // Restituição baixa = perde energia = orbita
+                        continue;
+                    }
+
+                    // Gravidade puxando os fragmentos
+                    if (distSq > 10) {
+                        let force = (G * b.mass * d.mass) / distSq;
+                        d.vx += (force / d.mass) * (dx / dist);
+                        d.vy += (force / d.mass) * (dy / dist);
+                    }
+                }
+
+                // Colisão suave entre os próprios fragmentos
+                for (let j = i + 1; j < debris.length; j++) {
+                    let d2 = debris[j];
+                    let dx = d2.x - d.x; let dy = d2.y - d.y;
+                    let minDist = d.radius + d2.radius;
+                    
+                    // Otimização: Evitar matemática pesada de raiz quadrada se estiverem longe
+                    if (Math.abs(dx) > minDist || Math.abs(dy) > minDist) continue;
+                    
+                    let distSq = dx*dx + dy*dy;
+                    if (distSq < minDist * minDist) {
+                        resolveBounce(d, d2, 0.1); 
+                    }
+                }
+            }
+
+            // Remover mortos e atualizar
+            bodies = bodies.filter(b => !b.dead);
+            bodies.forEach(b => b.update(1));
+            
+            debris.forEach(d => d.update(1));
+            debris = debris.filter(d => !d.dead);
+            
+            blackholes.forEach(bh => bh.update());
+        }
+
+        function handleCollision(a, b) {
+            let massRatio = a.mass / b.mass;
+            let larger = a.mass > b.mass ? a : b;
+            let smaller = a.mass > b.mass ? b : a;
+
+            if (massRatio > 5 || massRatio < 0.2) {
+                // Absorve parcialmente e o menor vira destroços
+                larger.mass += smaller.mass * 0.1; 
+                smaller.dead = true;
+                spawnExplosion(smaller);
+            } else {
+                // Ambos explodem
+                a.dead = true;
+                b.dead = true;
+                spawnExplosion(a);
+                spawnExplosion(b);
+            }
+        }
+
+        function spawnExplosion(sourceBody) {
+            // Calcula a quantidade exata baseada na área do corpo
+            let fragRadius = 1.5;
+            let area = sourceBody.radius * sourceBody.radius;
+            let count = Math.floor(area / (fragRadius * fragRadius));
+            
+            // Limitador de segurança para não travar, aumenta o raio do fragmento se passar de 120
+            if (count > 120) {
+                count = 120;
+                fragRadius = Math.sqrt(area / count);
+            }
+
+            let fragMass = sourceBody.mass / count;
+
+            for(let i = 0; i < count; i++) {
+                let angle = Math.random() * Math.PI * 2;
+                
+                // Distribuição da explosão retendo a inércia planetária
+                let speed = Math.random() * 2 + 0.5;
+                let vx = sourceBody.vx + Math.cos(angle) * speed;
+                let vy = sourceBody.vy + Math.sin(angle) * speed;
+                
+                // Distribuir de forma exata dentro do volume/raio original
+                let r = Math.random() * sourceBody.radius;
+                let x = sourceBody.x + Math.cos(angle) * r;
+                let y = sourceBody.y + Math.sin(angle) * r;
+                
+                debris.push(new Debris(x, y, vx, vy, sourceBody.color, fragRadius, fragMass));
+            }
+        }
+
+        function createSolarSystem() {
+            bodies = [];
+            debris = [];
+            blackholes = [];
+            camera = { x: 0, y: 0, zoom: 1 };
+
+            // Sol no centro (Massa gigante)
+            const sunMass = 20000;
+            bodies.push(new Body(0, 0, 40, sunMass, COLORS.sun, 0, 0, true));
+
+            // Função para calcular velocidade orbital circular: v = sqrt(G * M / r)
+            function addPlanet(name, r, m, color, distance) {
+                let v = Math.sqrt((G * sunMass) / distance);
+                // Coloca no eixo X, velocidade no eixo Y
+                let planet = new Body(distance, 0, r, m, color, 0, v);
+                bodies.push(planet);
+                return planet;
+            }
+
+            let earth = addPlanet("Terra", 8, 50, COLORS.earth, 300);
+            addPlanet("Marte", 6, 30, COLORS.mars, 450);
+            addPlanet("Júpiter", 18, 500, COLORS.jupiter, 700);
+
+            // Adicionar Lua à Terra
+            let moonDist = 25;
+            let moonV = Math.sqrt((G * earth.mass) / moonDist);
+            // Lua na direita da terra, somando velocidade da terra + orbita da lua
+            bodies.push(new Body(earth.x + moonDist, earth.y, 3, 5, COLORS.moon, earth.vx, earth.vy + moonV));
+
+            updateUI();
+        }
+
+        function toWorldCoords(sx, sy) {
+            return {
+                x: (sx - width/2) / camera.zoom - camera.x,
+                y: (sy - height/2) / camera.zoom - camera.y
+            };
+        }
+
+        canvas.addEventListener('mousedown', onPointerDown);
+        canvas.addEventListener('mousemove', onPointerMove);
+        window.addEventListener('mouseup', onPointerUp);
+        
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            let touch = e.touches[0];
+            onPointerDown({ clientX: touch.clientX, clientY: touch.clientY, button: 0 });
+        }, {passive: false});
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            let touch = e.touches[0];
+            onPointerMove({ clientX: touch.clientX, clientY: touch.clientY });
+        }, {passive: false});
+        
+        window.addEventListener('touchend', onPointerUp);
+
+        // Zoom com o scroll do mouse
+        canvas.addEventListener('wheel', (e) => {
+            let zoomFactor = 1.1;
+            if (e.deltaY > 0) camera.zoom /= zoomFactor;
+            else camera.zoom *= zoomFactor;
+            // Limites de zoom
+            camera.zoom = Math.max(0.1, Math.min(camera.zoom, 3));
+        });
+
+        function onPointerDown(e) {
+            if (e.button !== 0 && e.button !== undefined) return; // Apenas clique esquerdo ou touch
+            isDragging = true;
+            dragStart = { x: e.clientX, y: e.clientY };
+            dragCurrent = { x: e.clientX, y: e.clientY };
+
+            let wPos = toWorldCoords(e.clientX, e.clientY);
+
+            if (currentTool === 'blackhole') {
+                blackholes.push(new BlackHole(wPos.x, wPos.y));
+                isDragging = false;
+            }
+        }
+
+        function onPointerMove(e) {
+            dragCurrent = { x: e.clientX, y: e.clientY };
+            mouseWorld = toWorldCoords(e.clientX, e.clientY);
+
+            if (isDragging && currentTool === 'observe') {
+                camera.x += (dragCurrent.x - dragStart.x) / camera.zoom;
+                camera.y += (dragCurrent.y - dragStart.y) / camera.zoom;
+                dragStart = { x: dragCurrent.x, y: dragCurrent.y };
+            }
+        }
+
+        function onPointerUp(e) {
+            if (!isDragging) return;
+            isDragging = false;
+
+            if (currentTool === 'rock' || currentTool === 'planet') {
+                let startW = toWorldCoords(dragStart.x, dragStart.y);
+                let endW = toWorldCoords(dragCurrent.x, dragCurrent.y);
+                
+                // Vetor estilingue invertido
+                let vx = (startW.x - endW.x) * 0.05;
+                let vy = (startW.y - endW.y) * 0.05;
+
+                // Não atirar se o arraste for muito pequeno
+                if (Math.abs(vx) < 0.5 && Math.abs(vy) < 0.5) return;
+
+                if (currentTool === 'rock') {
+                    bodies.push(new Body(startW.x, startW.y, 4, 10, COLORS.rock, vx, vy));
+                } else {
+                    // Planeta com cor aleatória
+                    let col = `hsl(${Math.random() * 360}, 70%, 60%)`;
+                    bodies.push(new Body(startW.x, startW.y, 12, 150, col, vx, vy));
+                }
+            }
+        }
+
+        function draw() {
+            // Limpa o fundo (fundo espacial escuro)
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            // Transformações da câmera
+            ctx.translate(width/2, height/2);
+            ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(camera.x, camera.y);
+
+            // Desenhar Linha de Estilingue
+            if (isDragging && (currentTool === 'rock' || currentTool === 'planet')) {
+                let startW = toWorldCoords(dragStart.x, dragStart.y);
+                let endW = toWorldCoords(dragCurrent.x, dragCurrent.y);
+                ctx.beginPath();
+                ctx.moveTo(startW.x, startW.y);
+                ctx.lineTo(endW.x, endW.y);
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2 / camera.zoom;
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // Pre-visualizar corpo onde o mouse começou
+                ctx.beginPath();
+                ctx.arc(startW.x, startW.y, currentTool === 'planet' ? 12 : 4, 0, Math.PI*2);
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.fill();
+            }
+
+            // Desenhar Entidades
+            bodies.forEach(b => b.draw(ctx));
+            debris.forEach(d => d.draw(ctx));
+            blackholes.forEach(bh => bh.draw(ctx));
+
+            ctx.restore();
+        }
+
+        function loop() {
+            calculatePhysics();
+            draw();
+            updateUI();
+            requestAnimationFrame(loop);
+        }
+
+        function selectTool(tool) {
+            currentTool = tool;
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
+            document.getElementById(`tool-${tool}`).classList.add('selected');
+
+            const modeText = document.getElementById('mode-text');
+            if (tool === 'observe') modeText.innerText = "Modo: Arraste a tela / Scroll para Zoom";
+            if (tool === 'rock') modeText.innerText = "Modo: Estilingue de Asteroide (Arraste)";
+            if (tool === 'planet') modeText.innerText = "Modo: Estilingue de Planeta (Arraste)";
+            if (tool === 'blackhole') modeText.innerText = "Modo: Criar Buraco Negro (Clique)";
+        }
+
+        function togglePhysics() {
+            isPhysicsRunning = !isPhysicsRunning;
+            const btn = document.getElementById('btn-physics');
+            btn.innerText = isPhysicsRunning ? "Pausar Física" : "Retomar Física";
+            btn.classList.toggle('active', isPhysicsRunning);
+        }
+
+        function resetSystem() {
+            createSolarSystem();
+        }
+
+        function clearDebris() {
+            debris = [];
+        }
+
+        function updateUI() {
+            // Atualiza a cada 10 frames para economizar CPU
+            if (Math.random() < 0.1) {
+                document.getElementById('body-count').innerText = bodies.length + blackholes.length;
+                document.getElementById('particle-count').innerText = debris.length;
+            }
+        }
+
+        // Iniciar!
+        createSolarSystem();
+        loop();
+
+    </script>
+</body>
+</html>
