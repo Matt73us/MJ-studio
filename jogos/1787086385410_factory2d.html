@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Industrialist 2D: Advanced</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #111;
+            color: #e5e5e5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+        
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex; flex-direction: column;
+            justify-content: space-between; padding: 10px;
+            box-sizing: border-box; z-index: 10;
+        }
+        
+        .panel {
+            background-color: rgba(20, 20, 25, 0.95);
+            border: 2px solid #444; border-radius: 8px;
+            padding: 10px; pointer-events: auto;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.7);
+        }
+
+        /* HUD Elements */
+        #top-hud { display: flex; justify-content: space-between; align-items: flex-start; }
+        #stats-panel { display: flex; flex-direction: column; gap: 4px; }
+        .stat-line { display: flex; justify-content: space-between; gap: 20px; font-weight: bold; }
+        .text-money { color: #4ade80; }
+        .text-xp { color: #a78bfa; }
+        .text-power { color: #fbbf24; }
+
+        .modal-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 50;
+            display: none; justify-content: center; align-items: center; pointer-events: auto;
+        }
+        .modal {
+            background: #1a1a1a; border: 2px solid #555; border-radius: 8px;
+            width: 90%; max-width: 800px; max-height: 90vh;
+            display: flex; flex-direction: column; padding: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,1);
+        }
+        .modal-header { display: flex; justify-content: space-between; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 10px; }
+        .modal-body { overflow-y: auto; flex-grow: 1; }
+        .modal-close { cursor: pointer; color: #ef4444; font-weight: bold; font-size: 1.2rem; }
+        
+        /* Grid Layouts for Items/Machines */
+        .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 8px; }
+        .machine-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+        
+        .slot {
+            width: 50px; height: 50px; background-color: #333; border: 2px solid #666;
+            border-radius: 4px; display: flex; justify-content: center; align-items: center;
+            cursor: pointer; position: relative; transition: all 0.1s;
+        }
+        .slot:hover { border-color: #aaa; }
+        .slot.selected { border-color: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
+        .slot.locked { opacity: 0.3; filter: grayscale(100%); cursor: not-allowed; }
+        .slot-icon { width: 32px; height: 32px; pointer-events: none; }
+        .item-count { position: absolute; bottom: 0; right: 2px; font-size: 12px; font-weight: bold; color: white; text-shadow: 1px 1px 0 #000; pointer-events: none; }
+
+        .machine-card {
+            background: #2a2a2a; border: 1px solid #555; border-radius: 6px; padding: 10px;
+            cursor: pointer; display: flex; flex-direction: column; gap: 5px;
+        }
+        .machine-card:hover:not(.locked) { border-color: #fbbf24; background: #333; }
+        .machine-card.locked { opacity: 0.5; cursor: not-allowed; }
+        .machine-card.selected { border-color: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
+        
+        /* Machine UI Progress Bars */
+        .status-bar { width: 100%; height: 20px; background: #333; border-radius: 4px; overflow: hidden; position: relative; border: 1px solid #555; }
+        .status-fill { height: 100%; background: #3b82f6; transition: width 0.1s linear; }
+        .status-text { position: absolute; width: 100%; text-align: center; top: 0; left: 0; font-size: 12px; line-height: 20px; color: white; text-shadow: 1px 1px 1px #000; font-weight: bold; pointer-events: none;}
+
+        /* JEI Specifics */
+        #jei-layout { display: flex; gap: 20px; height: 100%; }
+        #jei-list { flex: 1; border-right: 1px solid #444; padding-right: 10px; overflow-y: auto; }
+        #jei-details { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .recipe-box { background: #222; border: 1px solid #444; padding: 10px; border-radius: 6px; }
+        .recipe-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 5px; }
+
+        #mobile-controls {
+            position: absolute; bottom: 20px; left: 20px;
+            display: grid; grid-template-columns: repeat(3, 50px); grid-template-rows: repeat(3, 50px);
+            gap: 5px; pointer-events: auto;
+        }
+        @media (min-width: 768px) { #mobile-controls, #action-btn { display: none; } }
+        .d-pad-btn { background: rgba(80, 80, 80, 0.7); border: 1px solid #aaa; border-radius: 8px; color: white; font-size: 24px; display: flex; justify-content: center; align-items: center; user-select: none; }
+        .d-pad-btn:active { background: rgba(120, 120, 120, 0.9); }
+        #btn-up { grid-column: 2; grid-row: 1; } #btn-left { grid-column: 1; grid-row: 2; }
+        #btn-right { grid-column: 3; grid-row: 2; } #btn-down { grid-column: 2; grid-row: 3; }
+        #btn-q { grid-column: 1; grid-row: 1; font-weight: bold; color: #fbbf24; border-color: #fbbf24; font-size: 20px; }
+
+        #action-btn {
+            position: absolute; bottom: 20px; right: 20px; width: 60px; height: 60px;
+            border-radius: 50%; background: rgba(200, 50, 50, 0.7); border: 2px solid #ffaaaa;
+            color: white; font-weight: bold; display: flex; justify-content: center; align-items: center;
+            pointer-events: auto; user-select: none;
+        }
+
+        #action-bar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; pointer-events: auto; }
+        .action-btn { background: #3b82f6; color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; border: 2px solid #2563eb; }
+        .action-btn:hover { background: #2563eb; }
+
+        #notification-area { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 5px; pointer-events: none; }
+        .toast { background: rgba(0, 0, 0, 0.9); border: 1px solid #444; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; opacity: 1; transition: opacity 0.5s ease-out; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        .toast.fade-out { opacity: 0; }
+        
+        #tooltip { position: absolute; background: rgba(0,0,0,0.9); color: white; padding: 5px 10px; border: 1px solid #777; border-radius: 4px; font-size: 12px; pointer-events: none; display: none; z-index: 100; white-space: nowrap; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="ui-layer">
+            <div id="top-hud">
+                <div class="panel" id="stats-panel">
+                    <h1 class="text-xl font-bold text-blue-400 mb-1 border-b border-gray-600 pb-1">Industrialist: Advanced</h1>
+                    <div class="stat-line"><span class="text-gray-300">Level:</span> <span id="ui-level" class="text-white">1</span></div>
+                    <div class="stat-line"><span class="text-gray-300">XP:</span> <span id="ui-xp" class="text-xp">0 / 100</span></div>
+                    <div class="stat-line"><span class="text-gray-300">Credits:</span> <span id="ui-credits" class="text-money">$0</span></div>
+                    <div class="stat-line"><span class="text-gray-300">Power:</span> <span id="ui-power" class="text-power">0 W</span></div>
+                    <div class="text-xs text-gray-400 mt-2">Setas: Mover | Clique: Construir</div>
+                </div>
+                
+                <div class="panel max-w-xs">
+                    <h2 class="font-bold text-gray-200 border-b border-gray-600 pb-1 mb-2">Inventory</h2>
+                    <div id="mini-inventory" class="item-grid" style="grid-template-columns: repeat(4, 1fr); max-height: 120px; overflow-y: auto;">
+                        <!-- Mini inventory slots -->
+                    </div>
+                </div>
+            </div>
+
+            <div id="notification-area"></div>
+            <div id="tooltip"></div>
+
+            <div id="action-bar">
+                <button class="action-btn" onclick="toggleBuildMenu()">Build Menu (B)</button>
+                <button class="action-btn bg-purple-600 border-purple-800 hover:bg-purple-700" onclick="toggleJEI()">Recipe Book (L)</button>
+            </div>
+
+            <div id="mobile-controls">
+                <div id="btn-q" class="d-pad-btn" title="Operação Manual">Q</div>
+                <div id="btn-up" class="d-pad-btn">▲</div>
+                <div id="btn-left" class="d-pad-btn">◄</div>
+                <div id="btn-right" class="d-pad-btn">►</div>
+                <div id="btn-down" class="d-pad-btn">▼</div>
+            </div>
+            <div id="action-btn" onclick="interact()">ACT</div>
+        </div>
+        
+        <!-- Machine UI Modal -->
+        <div id="machine-modal" class="modal-overlay">
+            <div class="modal h-[50vh] max-w-md">
+                <div class="modal-header">
+                    <h2 class="text-xl font-bold" id="mu-title">Machine</h2>
+                    <span class="modal-close" onclick="closeModals()">✖</span>
+                </div>
+                <div class="modal-body flex flex-col gap-3" id="mu-body">
+                    <!-- Dynamic content populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- JEI Modal -->
+        <div id="jei-modal" class="modal-overlay">
+            <div class="modal h-[80vh]">
+                <div class="modal-header">
+                    <h2 class="text-xl font-bold text-purple-400">Recipe Database (JEI)</h2>
+                    <span class="modal-close" onclick="toggleJEI()">✖</span>
+                </div>
+                <div class="modal-body" id="jei-layout">
+                    <div id="jei-list" class="item-grid">
+                        <!-- Items populated by JS -->
+                    </div>
+                    <div id="jei-details">
+                        <div class="text-gray-400 italic text-center mt-10">Select an item to view recipes.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Build Menu Modal -->
+        <div id="build-modal" class="modal-overlay">
+            <div class="modal h-[70vh]">
+                <div class="modal-header">
+                    <h2 class="text-xl font-bold text-blue-400">Construction Terminal</h2>
+                    <span class="modal-close" onclick="toggleBuildMenu()">✖</span>
+                </div>
+                <div class="modal-body">
+                    <div class="flex gap-4 mb-4 border-b border-gray-600 pb-2 overflow-x-auto">
+                        <button class="px-3 py-1 bg-gray-700 rounded text-white" onclick="filterBuild('all')">All</button>
+                        <button class="px-3 py-1 bg-gray-700 rounded text-white" onclick="filterBuild('logistics')">Logistics</button>
+                        <button class="px-3 py-1 bg-gray-700 rounded text-white" onclick="filterBuild('extraction')">Extraction</button>
+                        <button class="px-3 py-1 bg-gray-700 rounded text-white" onclick="filterBuild('processing')">Processing</button>
+                        <button class="px-3 py-1 bg-gray-700 rounded text-white" onclick="filterBuild('power')">Power</button>
+                    </div>
+                    <div id="build-list" class="machine-grid">
+                        <!-- Machines populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const tooltip = document.getElementById('tooltip');
+
+        // Game Constants
+        const TILE_SIZE = 32;
+        const WORLD_WIDTH = 150;
+        const WORLD_HEIGHT = 150;
+        let VIEWPORT_WIDTH, VIEWPORT_HEIGHT, cameraX = 0, cameraY = 0;
+        
+        let tickTimer = 0;
+        const TICK_RATE = 1000 / 10; // 10 ticks per second for processing logic
+
+        const PlayerStats = {
+            level: 1,
+            xp: 0,
+            credits: 250, // Start with some money
+            inventory: {}, // item_id : count
+            selectedMachine: null // Machine ID to build
+        };
+        
+        const xpToNextLevel = () => PlayerStats.level * 100;
+
+        // Visual Palette
+        const Colors = {
+            grass: '#1a3616', dirt: '#3e2723', stone: '#424242', water: '#0284c7',
+            iron: '#d6d3d1', copper: '#d97706', gold: '#facc15', coal: '#171717',
+            uranium: '#84cc16', lead: '#71717a',
+            machine_base: '#4b5563', machine_hl: '#9ca3af', error: '#ef4444', active: '#22c55e',
+            conveyor: '#262626', pipe: '#0ea5e9', cable: '#ea580c'
+        };
+
+        const ITEMS = {};
+        function registerItem(id, name, type, color, value) {
+            ITEMS[id] = { id, name, type, color, value };
+        }
+        
+        // Raw Ores (6)
+        registerItem('iron_ore', 'Iron Ore', 'ore', Colors.iron, 2);
+        registerItem('copper_ore', 'Copper Ore', 'ore', Colors.copper, 2);
+        registerItem('coal', 'Coal', 'resource', Colors.coal, 1);
+        registerItem('gold_ore', 'Gold Ore', 'ore', Colors.gold, 5);
+        registerItem('lead_ore', 'Lead Ore', 'ore', Colors.lead, 3);
+        registerItem('uranium_ore', 'Uranium Ore', 'ore', Colors.uranium, 10);
+        
+        // Ingots (6)
+        registerItem('iron_ingot', 'Iron Ingot', 'ingot', '#e5e7eb', 10);
+        registerItem('copper_ingot', 'Copper Ingot', 'ingot', '#f59e0b', 10);
+        registerItem('gold_ingot', 'Gold Ingot', 'ingot', '#fef08a', 25);
+        registerItem('lead_ingot', 'Lead Ingot', 'ingot', '#a1a1aa', 15);
+        registerItem('steel_ingot', 'Steel Ingot', 'ingot', '#64748b', 30);
+        registerItem('bronze_ingot', 'Bronze Ingot', 'ingot', '#b45309', 20);
+
+        // Dusts (6)
+        registerItem('iron_dust', 'Iron Dust', 'dust', '#e5e7eb', 4);
+        registerItem('copper_dust', 'Copper Dust', 'dust', '#f59e0b', 4);
+        registerItem('gold_dust', 'Gold Dust', 'dust', '#fef08a', 10);
+        registerItem('lead_dust', 'Lead Dust', 'dust', '#a1a1aa', 6);
+        registerItem('coal_dust', 'Coal Dust', 'dust', '#262626', 2);
+        registerItem('uranium_dust', 'Uranium Dust', 'dust', Colors.uranium, 20);
+
+        // Plates (5)
+        registerItem('iron_plate', 'Iron Plate', 'plate', '#e5e7eb', 15);
+        registerItem('copper_plate', 'Copper Plate', 'plate', '#f59e0b', 15);
+        registerItem('gold_plate', 'Gold Plate', 'plate', '#fef08a', 40);
+        registerItem('lead_plate', 'Lead Plate', 'plate', '#a1a1aa', 25);
+        registerItem('steel_plate', 'Steel Plate', 'plate', '#64748b', 50);
+
+        // Gears (3)
+        registerItem('iron_gear', 'Iron Gear', 'gear', '#e5e7eb', 35);
+        registerItem('copper_gear', 'Copper Gear', 'gear', '#f59e0b', 35);
+        registerItem('steel_gear', 'Steel Gear', 'gear', '#64748b', 110);
+
+        // Wires (3)
+        registerItem('copper_wire', 'Copper Wire', 'wire', '#f59e0b', 5);
+        registerItem('gold_wire', 'Gold Wire', 'wire', '#fef08a', 12);
+        registerItem('hv_wire', 'HV Cable', 'wire', '#ea580c', 40);
+
+        // Circuits (3)
+        registerItem('basic_circuit', 'Basic Circuit', 'circuit', '#22c55e', 100);
+        registerItem('adv_circuit', 'Advanced Circuit', 'circuit', '#3b82f6', 500);
+        registerItem('elite_circuit', 'Elite Circuit', 'circuit', '#a855f7', 2000);
+
+        // Parts (5)
+        registerItem('motor', 'Electric Motor', 'part', '#94a3b8', 150);
+        registerItem('rotor', 'Turbine Rotor', 'part', '#64748b', 200);
+        registerItem('machine_casing', 'Basic Casing', 'part', '#475569', 50);
+        registerItem('steel_casing', 'Steel Casing', 'part', '#334155', 200);
+        registerItem('adv_casing', 'Advanced Casing', 'part', '#1e293b', 800);
+
+        // Nuclear (6)
+        registerItem('u235', 'Uranium-235', 'nuclear', '#bef264', 200);
+        registerItem('u238', 'Uranium-238', 'nuclear', '#65a30d', 50);
+        registerItem('plutonium', 'Plutonium', 'nuclear', '#06b6d4', 1000);
+        registerItem('fuel_rod', 'Fuel Rod', 'nuclear', '#84cc16', 500);
+        registerItem('depleted_rod', 'Depleted Rod', 'nuclear', '#52525b', 10);
+        registerItem('toxic_waste', 'Toxic Waste', 'nuclear', '#854d0e', -10);
+
+        // Liquids/Gases (represented as items for logistics ease) (5)
+        registerItem('water', 'Water', 'fluid', '#0ea5e9', 0);
+        registerItem('steam', 'Steam', 'fluid', '#cbd5e1', 2);
+        registerItem('sulfuric_acid', 'Sulfuric Acid', 'fluid', '#eab308', 20);
+        registerItem('coolant', 'Coolant', 'fluid', '#38bdf8', 15);
+        registerItem('uf6', 'Uranium Hexafluoride', 'fluid', '#d9f99d', 100);
+
+        // Misc (2)
+        registerItem('rubber', 'Rubber', 'material', '#171717', 5);
+        registerItem('plastic', 'Plastic', 'material', '#e2e8f0', 20);
+
+
+        const MACHINES = {};
+        function regMachine(id, name, cat, level, cost, color, symbol, desc) {
+            MACHINES[id] = { id, name, category: cat, reqLevel: level, cost, color, symbol, desc };
+        }
+
+        // Logistics (5)
+        regMachine('conveyor', 'Conveyor Belt', 'logistics', 1, 5, Colors.conveyor, '»', 'Moves items automatically.');
+        regMachine('pipe', 'Fluid Pipe', 'logistics', 3, 10, Colors.pipe, 'O', 'Moves liquids/gases.');
+        regMachine('cable', 'Power Cable', 'logistics', 2, 5, Colors.cable, '⚡', 'Transmits power.');
+        regMachine('chest', 'Storage Chest', 'logistics', 1, 20, '#78350f', '▣', 'Stores up to 64 items.');
+        regMachine('fluid_tank', 'Fluid Tank', 'logistics', 4, 100, '#0284c7', '▤', 'Stores liquids.');
+
+        // Extraction
+        regMachine('miner_manual', 'Manual Drill', 'extraction', 1, 20, '#a3a3a3', 'T', 'Tier 1: Slow. Extracts Iron, Copper, Coal, Lead. No power needed.');
+        regMachine('miner_coal', 'Burner Drill', 'extraction', 3, 150, '#525252', 'T', 'Tier 2: Medium. Extracts up to Gold. Needs Coal fuel.');
+        regMachine('miner_electric', 'Electric Drill', 'extraction', 5, 800, '#3b82f6', 'T', 'Tier 3: Fast. Extracts all ores. Needs Power.');
+        regMachine('pump', 'Water Pump', 'extraction', 3, 100, '#0369a1', 'W', 'Extracts water endlessly. Needs Power.');
+
+        // Economy (1)
+        regMachine('sell_bin', 'Sell Bin', 'logistics', 1, 10, '#166534', '$', 'Sells items inserted for Credits & XP.');
+
+        // Processing Basic (4)
+        regMachine('furnace', 'Electric Furnace', 'processing', 2, 100, '#525252', '♨', 'Smelts ores and dusts into ingots. Needs Power.');
+        regMachine('crusher', 'Crusher', 'processing', 3, 150, '#3f3f46', '▼', 'Macerates ores into dusts (doubling output).');
+        regMachine('press', 'Metal Press', 'processing', 4, 200, '#27272a', '■', 'Presses ingots into plates.');
+        regMachine('wiremill', 'Wiremill', 'processing', 4, 200, '#18181b', '≈', 'Draws ingots into wires.');
+
+        // Processing Advanced (4)
+        regMachine('alloy_smelter', 'Alloy Smelter', 'processing', 5, 500, '#7f1d1d', '⧉', 'Combines two materials into an alloy.');
+        regMachine('assembler', 'Assembler', 'processing', 7, 1000, '#064e3b', '⚙', 'Crafts complex parts and circuits.');
+        regMachine('infuser', 'Chemical Infuser', 'processing', 10, 2000, '#854d0e', '⏣', 'Mixes fluids and items.');
+        regMachine('centrifuge', 'Industrial Centrifuge', 'processing', 12, 5000, '#1e1b4b', '◷', 'Separates complex materials (Uranium).');
+
+        // Power (4)
+        regMachine('power_pole', 'Power Pole', 'power', 2, 25, '#8b4513', '╤', 'Connects power to other poles up to 25 tiles away.');
+        regMachine('coal_gen', 'Coal Generator', 'power', 2, 100, '#171717', '🔥', 'Burns coal to produce power (50 W).');
+        regMachine('solar', 'Solar Panel', 'power', 6, 800, '#1d4ed8', '☀', 'Generates passive power (10 W).');
+        regMachine('boiler', 'Industrial Boiler', 'power', 8, 1500, '#451a03', '♨', 'Turns Water + Coal into Steam.');
+        regMachine('turbine', 'Steam Turbine', 'power', 8, 2000, '#334155', '✇', 'Consumes Steam to generate massive power (300 W).');
+        regMachine('reactor', 'Nuclear Reactor', 'power', 15, 20000, '#14532d', '☢', 'Consumes Fuel Rods & Coolant for extreme power (5000 W).');
+
+
+        const RECIPES = [];
+        function addRecipe(machine, inputs, outputs, time = 20) {
+            RECIPES.push({ machine, inputs, outputs, time });
+        }
+        
+        // Smelting
+        addRecipe('furnace', { iron_ore: 1 }, { iron_ingot: 1 });
+        addRecipe('furnace', { copper_ore: 1 }, { copper_ingot: 1 });
+        addRecipe('furnace', { gold_ore: 1 }, { gold_ingot: 1 });
+        addRecipe('furnace', { lead_ore: 1 }, { lead_ingot: 1 });
+        addRecipe('furnace', { iron_dust: 1 }, { iron_ingot: 1 });
+        addRecipe('furnace', { copper_dust: 1 }, { copper_ingot: 1 });
+        
+        // Crushing (Ore doubling)
+        addRecipe('crusher', { iron_ore: 1 }, { iron_dust: 2 }, 30);
+        addRecipe('crusher', { copper_ore: 1 }, { copper_dust: 2 }, 30);
+        addRecipe('crusher', { gold_ore: 1 }, { gold_dust: 2 }, 40);
+        addRecipe('crusher', { lead_ore: 1 }, { lead_dust: 2 }, 30);
+        addRecipe('crusher', { coal: 1 }, { coal_dust: 1 }, 20);
+        addRecipe('crusher', { uranium_ore: 1 }, { uranium_dust: 2 }, 60);
+
+        // Pressing
+        addRecipe('press', { iron_ingot: 1 }, { iron_plate: 1 }, 30);
+        addRecipe('press', { copper_ingot: 1 }, { copper_plate: 1 }, 30);
+        addRecipe('press', { gold_ingot: 1 }, { gold_plate: 1 }, 30);
+        addRecipe('press', { lead_ingot: 1 }, { lead_plate: 1 }, 30);
+        addRecipe('press', { steel_ingot: 1 }, { steel_plate: 1 }, 40);
+
+        // Wiremill
+        addRecipe('wiremill', { copper_ingot: 1 }, { copper_wire: 2 }, 20);
+        addRecipe('wiremill', { gold_ingot: 1 }, { gold_wire: 2 }, 20);
+        addRecipe('wiremill', { steel_plate: 1 }, { hv_wire: 1 }, 40); // Simplification
+
+        // Alloy Smelting
+        addRecipe('alloy_smelter', { iron_ingot: 1, coal_dust: 2 }, { steel_ingot: 1 }, 60);
+        addRecipe('alloy_smelter', { copper_ingot: 3, lead_ingot: 1 }, { bronze_ingot: 4 }, 60);
+
+        // Assembler (Components)
+        addRecipe('assembler', { iron_plate: 4 }, { machine_casing: 1 }, 50);
+        addRecipe('assembler', { steel_plate: 4 }, { steel_casing: 1 }, 80);
+        addRecipe('assembler', { iron_plate: 4, iron_ingot: 1 }, { iron_gear: 1 }, 40);
+        addRecipe('assembler', { copper_plate: 4, copper_ingot: 1 }, { copper_gear: 1 }, 40);
+        addRecipe('assembler', { steel_plate: 4, steel_ingot: 1 }, { steel_gear: 1 }, 60);
+        
+        addRecipe('assembler', { copper_wire: 3, iron_plate: 1 }, { basic_circuit: 1 }, 60);
+        addRecipe('assembler', { basic_circuit: 2, gold_wire: 2, plastic: 2 }, { adv_circuit: 1 }, 100);
+        addRecipe('assembler', { adv_circuit: 2, hv_wire: 2, steel_casing: 1 }, { elite_circuit: 1 }, 200);
+        
+        addRecipe('assembler', { copper_wire: 4, iron_gear: 1 }, { motor: 1 }, 80);
+        addRecipe('assembler', { steel_plate: 4, steel_gear: 1 }, { rotor: 1 }, 100);
+        
+        // Infuser & Centrifuge (Advanced/Nuclear)
+        addRecipe('infuser', { coal_dust: 1, water: 1 }, { plastic: 1 }, 40); // Fake recipe for simplicity
+        addRecipe('infuser', { uranium_dust: 1, sulfuric_acid: 1 }, { uf6: 1 }, 100);
+        
+        addRecipe('centrifuge', { uf6: 1 }, { u235: 1, u238: 3 }, 200); // 1 u235 and 3 u238 (simplified multi-output handling later)
+        
+        addRecipe('assembler', { u235: 1, u238: 4, steel_plate: 1 }, { fuel_rod: 1 }, 150);
+
+
+        class World {
+            constructor(w, h) {
+                this.width = w; this.height = h;
+                this.tiles = new Uint8Array(w * h);
+                this.machines = new Map();
+                this.itemsOnGround = [];
+                this.generate();
+            }
+            getIndex(x, y) { return y * this.width + x; }
+            getTile(x, y) {
+                if (x < 0 || x >= this.width || y < 0 || y >= this.height) return 0;
+                return this.tiles[this.getIndex(x, y)];
+            }
+            generate() {
+                // 0: grass, 1: water, 2: iron, 3: copper, 4: coal, 5: gold, 6: lead, 7: uranium
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        let r = Math.random();
+                        let id = 0; // Grass
+                        if (r < 0.03) id = 1; // Water puddles
+                        else if (r < 0.08) id = 4; // Coal
+                        else if (r < 0.12) id = 2; // Iron
+                        else if (r < 0.15) id = 3; // Copper
+                        else if (r < 0.17) id = 6; // Lead
+                        else if (r < 0.185) id = 5; // Gold
+                        else if (r < 0.195) id = 7; // Uranium
+                        this.tiles[this.getIndex(x, y)] = id;
+                    }
+                }
+                // Safe spawn area
+                for(let y = WORLD_HEIGHT/2 - 2; y < WORLD_HEIGHT/2 + 2; y++) {
+                    for(let x = WORLD_WIDTH/2 - 2; x < WORLD_WIDTH/2 + 2; x++) {
+                        this.tiles[this.getIndex(x,y)] = 0; 
+                    }
+                }
+            }
+            addMachine(x, y, m_id, rotation) {
+                const key = `${x},${y}`;
+                if (this.machines.has(key)) return false;
+                
+                let m;
+                switch(MACHINES[m_id].category) {
+                    case 'logistics': 
+                        if(m_id === 'conveyor') m = new Conveyor(x, y, rotation, m_id);
+                        else if(m_id === 'sell_bin') m = new SellBin(x, y, rotation, m_id);
+                        else m = new StorageMachine(x, y, rotation, m_id);
+                        break;
+                    case 'extraction': m = new Miner(x, y, rotation, m_id); break;
+                    case 'processing': m = new Processor(x, y, rotation, m_id); break;
+                    case 'power': 
+                        if(m_id === 'power_pole') m = new PowerPole(x, y, rotation, m_id);
+                        else m = new Generator(x, y, rotation, m_id); 
+                        break;
+                    default: m = new Machine(x, y, rotation, m_id);
+                }
+                
+                this.machines.set(key, m);
+                if (m.onPlace) m.onPlace(this); // Trigger setup (e.g. wire connections)
+                return true;
+            }
+            removeMachine(x, y) {
+                const key = `${x},${y}`;
+                if(this.machines.has(key)) {
+                    let m = this.machines.get(key);
+                    if (m.onDestroy) m.onDestroy(this); // Trigger cleanup
+                    this.machines.delete(key);
+                    return true;
+                }
+                return false;
+            }
+            getMachine(x, y) { return this.machines.get(`${x},${y}`); }
+        }
+
+        class Machine {
+            constructor(x, y, rotation, id) {
+                this.x = x; this.y = y; this.rotation = rotation; this.id = id;
+                const def = MACHINES[id];
+                this.energy = 0; this.maxEnergy = 1000;
+                this.active = false;
+                this.crankedTimer = 0; // Visual timer para operação manual (Q)
+            }
+            update(world) {}
+            manualOperate(world) {} // Override por máquinas específicas
+            draw(ctx, px, py) {
+                const def = MACHINES[this.id];
+                ctx.fillStyle = def.color;
+                ctx.fillRect(px+2, py+2, TILE_SIZE-4, TILE_SIZE-4);
+                
+                // Desenhar flash amarelo quando operado manualmente
+                if (this.crankedTimer > 0) {
+                    this.crankedTimer--;
+                    ctx.fillStyle = 'rgba(250, 204, 21, 0.4)'; // amarelo 400 com alfa
+                    ctx.fillRect(px+2, py+2, TILE_SIZE-4, TILE_SIZE-4);
+                }
+                
+                ctx.fillStyle = '#fff'; ctx.font = '14px Arial'; ctx.textAlign = 'center'; ctx.textBaseline='middle';
+                ctx.fillText(def.symbol, px + TILE_SIZE/2, py + TILE_SIZE/2);
+                
+                // Rotation indicator
+                ctx.fillStyle = '#000';
+                let ix = px+TILE_SIZE/2, iy = py+TILE_SIZE/2, off=12;
+                if(this.rotation===0) iy-=off; else if(this.rotation===1) ix+=off;
+                else if(this.rotation===2) iy+=off; else if(this.rotation===3) ix-=off;
+                ctx.fillRect(ix-2, iy-2, 4, 4);
+            }
+            getFacingCoords() {
+                let fx = this.x, fy = this.y;
+                if (this.rotation === 0) fy -= 1; else if (this.rotation === 1) fx += 1;
+                else if (this.rotation === 2) fy += 1; else if (this.rotation === 3) fx -= 1;
+                return {x: fx, y: fy};
+            }
+            pushItem(world, itemData) { return false; }
+            pushFluid(world, fluidId, amount) { return false; }
+        }
+
+        class Conveyor extends Machine {
+            constructor(x, y, rotation, id) {
+                super(x, y, rotation, id);
+                this.item = null; this.progress = 0; this.speed = 0.2;
+            }
+            pushItem(world, itemData) {
+                if (!this.item) { this.item = itemData; this.progress = 0; return true; }
+                return false;
+            }
+            update(world) {
+                if (this.item) {
+                    this.progress += this.speed;
+                    if (this.progress >= 1) {
+                        const tc = this.getFacingCoords();
+                        const tm = world.getMachine(tc.x, tc.y);
+                        let pushed = false;
+                        if (tm) pushed = tm.pushItem(world, this.item);
+                        else {
+                            world.itemsOnGround.push({ x: tc.x + 0.5, y: tc.y + 0.5, type: this.item });
+                            pushed = true;
+                        }
+                        if (pushed) { this.item = null; this.progress = 0; }
+                        else this.progress = 1;
+                    }
+                }
+            }
+            draw(ctx, px, py) {
+                ctx.fillStyle = '#222'; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+                ctx.save(); ctx.translate(px + TILE_SIZE/2, py + TILE_SIZE/2);
+                ctx.rotate(this.rotation * Math.PI / 2);
+                
+                ctx.fillStyle = '#555';
+                let offset = this.item ? (this.progress * TILE_SIZE) % (TILE_SIZE/4) : 0;
+                for(let i=0; i<4; i++) ctx.fillRect(-TILE_SIZE/2, -TILE_SIZE/2 + (i*TILE_SIZE/4) + offset - (TILE_SIZE/4), TILE_SIZE, 2);
+                ctx.fillStyle = '#aaa';
+                ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(-6, 4); ctx.lineTo(6, 4); ctx.fill();
+                ctx.restore();
+
+                if (this.item) {
+                    let ix = px + TILE_SIZE/2, iy = py + TILE_SIZE/2;
+                    let p = this.progress - 0.5;
+                    if(this.rotation === 0) iy -= p * TILE_SIZE; if(this.rotation === 1) ix += p * TILE_SIZE;
+                    if(this.rotation === 2) iy += p * TILE_SIZE; if(this.rotation === 3) ix -= p * TILE_SIZE;
+                    
+                    ctx.fillStyle = ITEMS[this.item].color;
+                    ctx.beginPath(); ctx.arc(ix, iy, 6, 0, Math.PI*2); ctx.fill();
+                    ctx.strokeStyle = '#000'; ctx.stroke();
+                }
+            }
+        }
+
+        class StorageMachine extends Machine {
+            constructor(x, y, rotation, id) {
+                super(x, y, rotation, id);
+                this.inventory = {};
+            }
+            pushItem(world, itemData) {
+                if(this.id !== 'chest') return false;
+                this.inventory[itemData] = (this.inventory[itemData] || 0) + 1;
+                return true;
+            }
+        }
+
+        class SellBin extends Machine {
+            pushItem(world, itemData) {
+                const item = ITEMS[itemData];
+                if (item) {
+                    PlayerStats.credits += item.value;
+                    PlayerStats.xp += Math.max(1, Math.floor(item.value / 2));
+                    checkLevelUp();
+                    updateHUD();
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        class Miner extends Machine {
+            constructor(x, y, rotation, id) {
+                super(x, y, rotation, id);
+                this.timer = 0;
+                this.fuel = 0; 
+                
+                if (id === 'miner_manual') { this.mineTime = 60; this.tier = 1; this.energyPerTick = 0; }
+                else if (id === 'miner_coal') { this.mineTime = 30; this.tier = 2; this.energyPerTick = 0; }
+                else if (id === 'miner_electric') { this.mineTime = 15; this.tier = 3; this.energyPerTick = 20; this.maxEnergy = 1000; }
+                else if (id === 'pump') { this.mineTime = 10; this.tier = 1; this.energyPerTick = 10; this.maxEnergy = 1000; }
+            }
+            
+            manualOperate(world) {
+                // Operar manualmente uma perfuratriz manual (multiplica a velocidade)
+                if (this.id === 'miner_manual') {
+                    this.timer += 5; // Adiciona progresso extra
+                    this.crankedTimer = 2; // Efeito visual curto
+                }
+            }
+            
+            pushItem(world, itemData) {
+                // Accepts coal as fuel if it is a burner drill
+                if (this.id === 'miner_coal' && itemData === 'coal') {
+                    this.fuel += 50; // Each coal fuels 50 mining ticks
+                    return true;
+                }
+                return false;
+            }
+
+            update(world) {
+                this.active = false;
+                
+                const tile = world.getTile(this.x, this.y);
+                let oreTier = 0;
+                
+                if (this.id === 'pump') {
+                    if (tile === 1) oreTier = 1;
+                    else oreTier = 99; // Invalid placement
+                } else {
+                    if (tile === 4 || tile === 2 || tile === 3 || tile === 6) oreTier = 1; // Coal, Iron, Copper, Lead
+                    else if (tile === 5) oreTier = 2; // Gold
+                    else if (tile === 7) oreTier = 3; // Uranium
+                    else oreTier = 99; // Not an ore
+                }
+
+                // Check if drill tier is high enough for the ore
+                if (oreTier <= this.tier) {
+                    let canRun = false;
+                    if (this.id === 'miner_manual') canRun = true;
+                    else if (this.id === 'miner_coal') {
+                        if (this.fuel > 0) { this.fuel--; canRun = true; }
+                    } else if (this.id === 'miner_electric' || this.id === 'pump') {
+                        if (this.energy >= this.energyPerTick) { 
+                            this.energy -= this.energyPerTick; 
+                            canRun = true; 
+                        }
+                    }
+
+                    if (canRun) {
+                        this.active = true;
+                        this.timer++;
+                        if (this.timer >= this.mineTime) {
+                            this.timer = 0;
+                            let drop = null;
+                            if (this.id === 'pump') drop = 'water';
+                            else if (tile === 2) drop = 'iron_ore';
+                            else if (tile === 3) drop = 'copper_ore';
+                            else if (tile === 4) drop = 'coal';
+                            else if (tile === 5) drop = 'gold_ore';
+                            else if (tile === 6) drop = 'lead_ore';
+                            else if (tile === 7) drop = 'uranium_ore';
+
+                            if (drop) {
+                                const tc = this.getFacingCoords();
+                                const tm = world.getMachine(tc.x, tc.y);
+                                let pushed = false;
+                                if (tm) pushed = tm.pushItem(world, drop);
+                                if (!pushed && !tm) {
+                                    world.itemsOnGround.push({ x: tc.x + 0.5, y: tc.y + 0.5, type: drop });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            draw(ctx, px, py) {
+                super.draw(ctx, px, py);
+                if(this.active) {
+                    ctx.fillStyle = Colors.active;
+                    ctx.fillRect(px+4, py+4, 4, 4);
+                }
+                // Fuel bar indicator for burner drill
+                if (this.id === 'miner_coal' && this.fuel > 0) {
+                    ctx.fillStyle = '#ef4444'; // Red fire bar
+                    let p = Math.min(1, this.fuel / 500);
+                    ctx.fillRect(px + 4, py + TILE_SIZE - 6, (TILE_SIZE - 8) * p, 3);
+                }
+            }
+        }
+
+        class Processor extends Machine {
+            constructor(x, y, rotation, id) {
+                super(x, y, rotation, id);
+                this.inventory = {}; // inputs
+                this.outputBuffer = []; // outputs waiting to exit
+                this.progress = 0;
+                this.currentRecipe = null;
+                this.energyPerTick = id === 'centrifuge' ? 100 : (id === 'assembler' ? 50 : 20);
+            }
+            
+            manualOperate(world) {
+                // Algumas máquinas de processamento básicas podem ser operadas manualmente se tiverem receita pronta
+                if (['furnace', 'crusher', 'press', 'wiremill'].includes(this.id)) {
+                    if (this.currentRecipe || this.outputBuffer.length === 0) {
+                        // Fornecer energia grátis e dar um bônus de progresso (3x mais rápido sem energia da base)
+                        this.energy = Math.max(this.energy, this.energyPerTick);
+                        this.progress += 2;
+                        this.crankedTimer = 2; // Efeito visual curto
+                    }
+                }
+            }
+            
+            pushItem(world, itemData) {
+                // Accepts if it's an input for ANY recipe this machine can do
+                for (let r of RECIPES) {
+                    if (r.machine === this.id && r.inputs[itemData]) {
+                        this.inventory[itemData] = (this.inventory[itemData] || 0) + 1;
+                        return true;
+                    }
+                }
+                return false;
+            }
+            update(world) {
+                this.active = false;
+                
+                // Push outputs
+                if (this.outputBuffer.length > 0) {
+                    const tc = this.getFacingCoords();
+                    const tm = world.getMachine(tc.x, tc.y);
+                    let item = this.outputBuffer[0];
+                    let pushed = false;
+                    if (tm) pushed = tm.pushItem(world, item);
+                    if (pushed || !tm) {
+                        if (!pushed) world.itemsOnGround.push({ x: tc.x + 0.5, y: tc.y + 0.5, type: item });
+                        this.outputBuffer.shift();
+                    }
+                }
+
+                // Find valid recipe
+                if (!this.currentRecipe && this.outputBuffer.length === 0) {
+                    for (let r of RECIPES) {
+                        if (r.machine === this.id) {
+                            let canCraft = true;
+                            for (let [inkey, inamt] of Object.entries(r.inputs)) {
+                                if ((this.inventory[inkey] || 0) < inamt) { canCraft = false; break; }
+                            }
+                            if (canCraft) {
+                                this.currentRecipe = r;
+                                this.progress = 0;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Process
+                if (this.currentRecipe && this.energy >= this.energyPerTick) {
+                    this.energy -= this.energyPerTick;
+                    this.active = true;
+                    this.progress++;
+                    if (this.progress >= this.currentRecipe.time) {
+                        // Consume
+                        for (let [inkey, inamt] of Object.entries(this.currentRecipe.inputs)) {
+                            this.inventory[inkey] -= inamt;
+                        }
+                        // Produce
+                        for (let [outkey, outamt] of Object.entries(this.currentRecipe.outputs)) {
+                            for(let i=0; i<outamt; i++) this.outputBuffer.push(outkey);
+                        }
+                        this.currentRecipe = null;
+                        this.progress = 0;
+                    }
+                }
+            }
+            draw(ctx, px, py) {
+                super.draw(ctx, px, py);
+                if (this.currentRecipe && this.active) {
+                    let p = this.progress / this.currentRecipe.time;
+                    ctx.fillStyle = Colors.active;
+                    ctx.fillRect(px + 4, py + TILE_SIZE - 6, (TILE_SIZE - 8) * p, 4);
+                }
+            }
+        }
+
+        class Generator extends Machine {
+            constructor(x, y, rotation, id) {
+                super(x, y, rotation, id);
+                this.fuel = 0;
+                this.genRate = id==='reactor' ? 5000 : (id==='turbine'? 300 : (id==='coal_gen'? 50 : 10));
+                this.maxEnergy = this.genRate * 100;
+            }
+            pushItem(world, itemData) {
+                if (this.id === 'coal_gen' && itemData === 'coal') { this.fuel += 100; return true; }
+                if (this.id === 'reactor' && itemData === 'fuel_rod') { this.fuel += 1000; return true; }
+                return false;
+            }
+            update(world) {
+                this.active = false;
+                if (this.id === 'solar') {
+                    this.energy = Math.min(this.maxEnergy, this.energy + this.genRate);
+                    this.active = true;
+                } else if (this.fuel > 0) {
+                    this.fuel--;
+                    this.energy = Math.min(this.maxEnergy, this.energy + this.genRate);
+                    this.active = true;
+                }
+                
+                // Distribute power to adjacent
+                if (this.energy > 0) {
+                    const neighbors = [{x:this.x,y:this.y-1},{x:this.x+1,y:this.y},{x:this.x,y:this.y+1},{x:this.x-1,y:this.y}];
+                    let rec = [];
+                    for(let n of neighbors) {
+                        let m = world.getMachine(n.x, n.y);
+                        if(m && m.maxEnergy > 0 && m.energy < m.maxEnergy) rec.push(m);
+                    }
+                    if(rec.length > 0) {
+                        let amt = Math.min(this.energy / rec.length, this.genRate);
+                        for(let r of rec) {
+                            let trans = Math.min(amt, r.maxEnergy - r.energy);
+                            r.energy += trans; this.energy -= trans;
+                        }
+                    }
+                }
+            }
+        }
+
+        class PowerPole extends Machine {
+            constructor(x, y, rotation, id) {
+                super(x, y, rotation, id);
+                this.maxEnergy = 5000;
+                this.connections = [];
+            }
+            onPlace(world) {
+                // Find and connect to other poles within 25 tiles
+                for (let m of world.machines.values()) {
+                    if (m !== this && m.id === 'power_pole') {
+                        let dist = Math.hypot(m.x - this.x, m.y - this.y);
+                        if (dist <= 25) {
+                            this.connections.push(m);
+                            m.connections.push(this);
+                        }
+                    }
+                }
+            }
+            onDestroy(world) {
+                // Remove self from connections
+                for (let m of this.connections) {
+                    m.connections = m.connections.filter(c => c !== this);
+                }
+            }
+            update(world) {
+                // Balance energy with connected poles
+                for (let c of this.connections) {
+                    if (this.energy > c.energy) {
+                        let diff = this.energy - c.energy;
+                        let transfer = diff / 2;
+                        this.energy -= transfer;
+                        c.energy += transfer;
+                    }
+                }
+
+                // Push power to adjacent consumers
+                if (this.energy > 0) {
+                    const neighbors = [{x:this.x,y:this.y-1},{x:this.x+1,y:this.y},{x:this.x,y:this.y+1},{x:this.x-1,y:this.y}];
+                    let consumers = [];
+                    for(let n of neighbors) {
+                        let m = world.getMachine(n.x, n.y);
+                        // Push to non-poles and non-generators that need energy
+                        if(m && m.maxEnergy > 0 && m.id !== 'power_pole' && !(m instanceof Generator) && m.energy < m.maxEnergy) {
+                            consumers.push(m);
+                        }
+                    }
+                    if(consumers.length > 0) {
+                        let amt = Math.min(this.energy / consumers.length, 250); // Transfer rate
+                        for(let c of consumers) {
+                            let trans = Math.min(amt, c.maxEnergy - c.energy);
+                            c.energy += trans;
+                            this.energy -= trans;
+                        }
+                    }
+                }
+            }
+            draw(ctx, px, py) {
+                // Draw base
+                ctx.fillStyle = '#8b4513';
+                ctx.fillRect(px + TILE_SIZE/2 - 4, py + TILE_SIZE/2 - 4, 8, 8);
+                // Draw pole top
+                ctx.fillStyle = '#f59e0b';
+                ctx.beginPath();
+                ctx.arc(px + TILE_SIZE/2, py + TILE_SIZE/2, 4, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+
+        const player = { x: WORLD_WIDTH/2, y: WORLD_HEIGHT/2, speed: 0.2, w: 0.8, h: 0.8, facing: 2 };
+        const keys = { w:false, a:false, s:false, d:false, ArrowUp:false, ArrowDown:false, ArrowLeft:false, ArrowRight:false, q:false };
+        
+        let openMachine = null; // Track currently interacted machine
+        const world = new World(WORLD_WIDTH, WORLD_HEIGHT);
+        
+        // Input Handling
+        window.addEventListener('keydown', e => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+            if (e.key.toLowerCase() === 'q') keys.q = true; // Handle uppercase Q/Caps
+            if (e.key.toLowerCase() === 'l') toggleJEI();
+            if (e.key.toLowerCase() === 'b' || e.key.toLowerCase() === 'e') toggleBuildMenu();
+            if (e.code === 'Space') { e.preventDefault(); interact(); }
+            if (e.key === 'Escape') closeModals();
+        });
+        window.addEventListener('keyup', e => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+            if (e.key.toLowerCase() === 'q') keys.q = false;
+        });
+
+        // Touch/Mouse
+        const addTouch = (id, prop) => {
+            const el = document.getElementById(id);
+            if(el) {
+                el.addEventListener('touchstart', e => { e.preventDefault(); keys[prop] = true; });
+                el.addEventListener('touchend', e => { e.preventDefault(); keys[prop] = false; });
+            }
+        };
+        addTouch('btn-up', 'w'); addTouch('btn-down', 's'); addTouch('btn-left', 'a'); addTouch('btn-right', 'd');
+        addTouch('btn-q', 'q');
+
+        let mouseX = 0, mouseY = 0;
+        canvas.addEventListener('mousemove', e => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
+        });
+        canvas.addEventListener('mousedown', e => {
+            if(document.querySelector('.modal-overlay[style*="flex"]')) return; // Don't build if modal open
+            
+            const tx = Math.floor((mouseX + cameraX) / TILE_SIZE);
+            const ty = Math.floor((mouseY + cameraY) / TILE_SIZE);
+            
+            if (e.button === 0) { // Left click: Build
+                if (PlayerStats.selectedMachine) {
+                    const mDef = MACHINES[PlayerStats.selectedMachine];
+                    if (PlayerStats.credits >= mDef.cost) {
+                        if (world.addMachine(tx, ty, PlayerStats.selectedMachine, player.facing)) {
+                            PlayerStats.credits -= mDef.cost;
+                            updateHUD();
+                        } else showNotification("Space occupied!");
+                    } else showNotification("Not enough credits!");
+                }
+            } else if (e.button === 2) { // Right click: Demolish
+                world.removeMachine(tx, ty);
+            }
+        });
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+
+        function checkLevelUp() {
+            while (PlayerStats.xp >= xpToNextLevel()) {
+                PlayerStats.xp -= xpToNextLevel();
+                PlayerStats.level++;
+                showNotification(`LEVEL UP! You are now level ${PlayerStats.level}!`, 'success');
+                renderBuildMenu(); // Refresh unlocks
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('ui-level').innerText = PlayerStats.level;
+            document.getElementById('ui-xp').innerText = `${PlayerStats.xp} / ${xpToNextLevel()}`;
+            document.getElementById('ui-credits').innerText = `$${PlayerStats.credits}`;
+            
+            // Calculate total power
+            let pwr = 0;
+            for(let m of world.machines.values()) {
+                if(m instanceof Generator) pwr += m.energy;
+            }
+            document.getElementById('ui-power').innerText = `${Math.floor(pwr)} W`;
+            renderMiniInventory();
+        }
+
+        function showNotification(msg, type='info') {
+            const area = document.getElementById('notification-area');
+            const t = document.createElement('div');
+            t.className = 'toast';
+            if(type==='success') t.style.color = '#4ade80';
+            else if(type==='error') t.style.color = '#ef4444';
+            t.innerText = msg;
+            area.appendChild(t);
+            setTimeout(() => { t.classList.add('fade-out'); setTimeout(()=>t.remove(), 500); }, 2500);
+        }
+
+        function update() {
+            // Movement
+            let dx = 0, dy = 0;
+            if (keys.w || keys.ArrowUp) { dy -= player.speed; player.facing = 0; }
+            if (keys.s || keys.ArrowDown) { dy += player.speed; player.facing = 2; }
+            if (keys.a || keys.ArrowLeft) { dx -= player.speed; player.facing = 3; }
+            if (keys.d || keys.ArrowRight) { dx += player.speed; player.facing = 1; }
+
+            if (player.x + dx > 0 && player.x + dx < world.width) player.x += dx;
+            if (player.y + dy > 0 && player.y + dy < world.height) player.y += dy;
+
+            cameraX = Math.max(0, Math.min((player.x * TILE_SIZE) - VIEWPORT_WIDTH/2, world.width * TILE_SIZE - VIEWPORT_WIDTH));
+            cameraY = Math.max(0, Math.min((player.y * TILE_SIZE) - VIEWPORT_HEIGHT/2, world.height * TILE_SIZE - VIEWPORT_HEIGHT));
+
+            const now = performance.now();
+            if (now - tickTimer > TICK_RATE) {
+                tickTimer = now;
+                
+                // Operação manual de máquinas (Mecânica do Q)
+                if (keys.q) {
+                    const pos = getFacingTile();
+                    const fm = world.getMachine(pos.x, pos.y);
+                    if (fm && fm.manualOperate) {
+                        fm.manualOperate(world);
+                    }
+                }
+
+                for (let m of world.machines.values()) m.update(world);
+                
+                if (openMachine) updateMachineUIStats();
+
+                // Item Pickup
+                for(let i = world.itemsOnGround.length - 1; i >= 0; i--) {
+                    let item = world.itemsOnGround[i];
+                    if (Math.hypot(item.x - player.x, item.y - player.y) < 1.5) {
+                        PlayerStats.inventory[item.type] = (PlayerStats.inventory[item.type] || 0) + 1;
+                        world.itemsOnGround.splice(i, 1);
+                        updateHUD();
+                    }
+                }
+                updateHUD();
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const sc = Math.floor(cameraX / TILE_SIZE), ec = sc + Math.ceil(VIEWPORT_WIDTH / TILE_SIZE) + 1;
+            const sr = Math.floor(cameraY / TILE_SIZE), er = sr + Math.ceil(VIEWPORT_HEIGHT / TILE_SIZE) + 1;
+            const ox = -cameraX + (sc * TILE_SIZE), oy = -cameraY + (sr * TILE_SIZE);
+
+            ctx.save(); ctx.translate(ox, oy);
+
+            // Ground
+            for (let y = sr; y < er; y++) {
+                for (let x = sc; x < ec; x++) {
+                    const tid = world.getTile(x, y);
+                    const px = (x - sc) * TILE_SIZE, py = (y - sr) * TILE_SIZE;
+                    
+                    let color = Colors.grass;
+                    if(tid===1) color = Colors.water; else if(tid===2) color = Colors.iron;
+                    else if(tid===3) color = Colors.copper; else if(tid===4) color = Colors.coal;
+                    else if(tid===5) color = Colors.gold; else if(tid===6) color = Colors.lead;
+                    else if(tid===7) color = Colors.uranium;
+                    
+                    ctx.fillStyle = tid === 0 ? Colors.grass : (tid === 1 ? Colors.water : Colors.dirt);
+                    ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+                    
+                    if(tid > 1) { // Draw ore specks
+                        ctx.fillStyle = color;
+                        ctx.fillRect(px+4, py+4, 8, 8); ctx.fillRect(px+16, py+12, 6, 6); ctx.fillRect(px+8, py+20, 10, 8);
+                    }
+                }
+            }
+
+            // Draw Power Wires
+            for (let m of world.machines.values()) {
+                if (m.id === 'power_pole') {
+                    for (let c of m.connections) {
+                        // Avoid drawing the same line twice
+                        if (m.x < c.x || (m.x === c.x && m.y < c.y)) {
+                            let px1 = (m.x - sc) * TILE_SIZE + TILE_SIZE/2;
+                            let py1 = (m.y - sr) * TILE_SIZE + TILE_SIZE/2;
+                            let px2 = (c.x - sc) * TILE_SIZE + TILE_SIZE/2;
+                            let py2 = (c.y - sr) * TILE_SIZE + TILE_SIZE/2;
+                            
+                            ctx.strokeStyle = 'rgba(234, 88, 12, 0.6)'; // Cable Color
+                            ctx.lineWidth = 2;
+                            ctx.beginPath();
+                            ctx.moveTo(px1, py1);
+                            ctx.lineTo(px2, py2);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            // Machines & Items
+            for (let y = sr; y < er; y++) {
+                for (let x = sc; x < ec; x++) {
+                    const m = world.getMachine(x, y);
+                    if (m) m.draw(ctx, (x - sc) * TILE_SIZE, (y - sr) * TILE_SIZE);
+                }
+            }
+            
+            for (let item of world.itemsOnGround) {
+                if (item.x >= sc && item.x <= ec && item.y >= sr && item.y <= er) {
+                    ctx.fillStyle = ITEMS[item.type].color;
+                    ctx.beginPath(); ctx.arc((item.x - sc)*TILE_SIZE, (item.y - sr)*TILE_SIZE, 5, 0, Math.PI*2); ctx.fill();
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth=1; ctx.stroke();
+                }
+            }
+
+            // Player
+            const ppx = (player.x - sc) * TILE_SIZE, ppy = (player.y - sr) * TILE_SIZE;
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(ppx - (player.w*TILE_SIZE)/2, ppy - (player.h*TILE_SIZE)/2, player.w*TILE_SIZE, player.h*TILE_SIZE);
+            ctx.fillStyle = '#fff';
+            let ex = ppx, ey = ppy, eoff = 6;
+            if(player.facing===0) ey-=eoff; if(player.facing===1) ex+=eoff;
+            if(player.facing===2) ey+=eoff; if(player.facing===3) ex-=eoff;
+            ctx.beginPath(); ctx.arc(ex, ey, 3, 0, Math.PI*2); ctx.fill();
+
+            // Interações Visuais Adicionais (Preview de construção e dica visual)
+            if (!document.querySelector('.modal-overlay[style*="flex"]')) {
+                // Tooltip em máquinas com operação manual se estiver olhando
+                const f = getFacingTile();
+                const fm = world.getMachine(f.x, f.y);
+                
+                if (fm && f.x >= sc && f.x < ec && f.y >= sr && f.y < er) {
+                    let isManual = false;
+                    if (fm.id === 'miner_manual') isManual = true;
+                    if (['furnace', 'crusher', 'press', 'wiremill'].includes(fm.id)) isManual = true;
+                    
+                    if (isManual) {
+                        ctx.fillStyle = '#fbbf24';
+                        ctx.font = 'bold 12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('Segure Q', (f.x - sc) * TILE_SIZE + TILE_SIZE/2, (f.y - sr) * TILE_SIZE - 5);
+                    }
+                }
+
+                // Linha de construção do mouse
+                const tx = Math.floor((mouseX + cameraX) / TILE_SIZE);
+                const ty = Math.floor((mouseY + cameraY) / TILE_SIZE);
+                if (tx >= sc && tx < ec && ty >= sr && ty < er) {
+                    ctx.strokeStyle = PlayerStats.selectedMachine ? 'rgba(74, 222, 128, 0.8)' : 'rgba(255, 255, 255, 0.4)';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect((tx - sc) * TILE_SIZE, (ty - sr) * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            update(); draw(); requestAnimationFrame(gameLoop);
+        }
+
+        function toggleJEI() {
+            const el = document.getElementById('jei-modal');
+            if(el.style.display === 'flex') el.style.display = 'none';
+            else { el.style.display = 'flex'; renderJEIList(); }
+        }
+
+        function toggleBuildMenu() {
+            const el = document.getElementById('build-modal');
+            if(el.style.display === 'flex') el.style.display = 'none';
+            else { closeModals(); el.style.display = 'flex'; renderBuildMenu(); }
+        }
+        
+        function closeModals() {
+            document.getElementById('jei-modal').style.display = 'none';
+            document.getElementById('build-modal').style.display = 'none';
+            document.getElementById('machine-modal').style.display = 'none';
+            openMachine = null;
+        }
+
+        // --- INTERACTION LOGIC ---
+        function getFacingTile() {
+            let cx = Math.floor(player.x);
+            let cy = Math.floor(player.y);
+            if(player.facing===0) cy-=1; if(player.facing===1) cx+=1;
+            if(player.facing===2) cy+=1; if(player.facing===3) cx-=1;
+            return {x: cx, y: cy};
+        }
+
+        function interact() {
+            if(document.querySelector('.modal-overlay[style*="flex"]')) { closeModals(); return; }
+            const pos = getFacingTile();
+            const m = world.getMachine(pos.x, pos.y);
+            if (m) {
+                openMachine = m;
+                document.getElementById('machine-modal').style.display = 'flex';
+                renderMachineUI();
+            } else {
+                showNotification("Nenhuma máquina à frente.", "error");
+            }
+        }
+
+        function renderMachineUI() {
+            if (!openMachine) return;
+            const m = openMachine;
+            const mDef = MACHINES[m.id];
+            document.getElementById('mu-title').innerText = mDef.name;
+            document.getElementById('mu-title').style.color = mDef.color;
+            
+            let html = '';
+            
+            if (m.maxEnergy > 0) {
+                html += `<div class="text-sm font-bold text-gray-300">Energia</div>
+                         <div class="status-bar"><div id="mu-energy-fill" class="status-fill bg-yellow-500" style="width:0%"></div><div id="mu-energy-text" class="status-text"></div></div>`;
+            }
+            
+            if (m.id === 'miner_coal' || m.id === 'coal_gen' || m.id === 'reactor') {
+                html += `<div class="text-sm font-bold text-gray-300 mt-2">Combustível</div>
+                         <div class="status-bar"><div id="mu-fuel-fill" class="status-fill bg-red-500" style="width:0%"></div><div id="mu-fuel-text" class="status-text"></div></div>`;
+                
+                html += `<div class="flex gap-2 mt-1">`;
+                if (m.id === 'reactor') {
+                    html += `<button class="action-btn bg-green-700 w-full text-xs" onclick="insertFuel('fuel_rod')">Inserir Fuel Rod</button>`;
+                } else {
+                    html += `<button class="action-btn bg-gray-700 w-full text-xs" onclick="insertFuel('coal')">Inserir Carvão</button>`;
+                }
+                html += `</div>`;
+            }
+            
+            if (m instanceof Processor) {
+                html += `<div class="text-sm font-bold text-gray-300 mt-2">Progresso</div>
+                         <div class="status-bar"><div id="mu-prog-fill" class="status-fill bg-blue-500" style="width:0%"></div><div id="mu-prog-text" class="status-text"></div></div>`;
+                
+                html += `<div class="flex gap-2 mt-4">
+                            <button class="action-btn bg-purple-600 w-full text-sm py-1" onclick="autoInsertProcessor()">Preencher Materiais</button>
+                            <button class="action-btn bg-green-600 w-full text-sm py-1" onclick="extractOutputs()">Recolher Produtos</button>
+                         </div>`;
+            }
+
+            if (m instanceof StorageMachine) {
+                html += `<div class="text-sm font-bold text-gray-300 mt-2">Inventário (Clique para Retirar)</div>`;
+                html += `<div class="item-grid bg-black p-2 rounded" style="grid-template-columns: repeat(6, 1fr);">`;
+                let hasItems = false;
+                for(let [id, count] of Object.entries(m.inventory)) {
+                    if(count > 0) {
+                        hasItems = true;
+                        const item = ITEMS[id];
+                        html += `<div class="slot cursor-pointer border-gray-600 hover:border-white" title="${item.name}" onclick="extractFromChest('${id}')">
+                                    <div style="width:20px;height:20px;background:${item.color};border-radius:2px;"></div>
+                                    <span class="item-count">${count}</span>
+                                 </div>`;
+                    }
+                }
+                if(!hasItems) html += `<div class="text-xs text-gray-500 col-span-6 text-center py-2">Baú vazio.</div>`;
+                html += `</div>`;
+                html += `<button class="action-btn bg-blue-600 w-full text-sm py-2 mt-2" onclick="dumpInventoryToChest()">Depositar Tudo</button>`;
+            }
+            
+            document.getElementById('mu-body').innerHTML = html;
+            updateMachineUIStats(); 
+        }
+
+        function updateMachineUIStats() {
+            if (!openMachine) return;
+            const m = openMachine;
+            
+            const enBar = document.getElementById('mu-energy-fill');
+            const enText = document.getElementById('mu-energy-text');
+            if (enBar && enText) {
+                enBar.style.width = `${(m.energy / m.maxEnergy) * 100}%`;
+                enText.innerText = `${Math.floor(m.energy)} / ${m.maxEnergy} W`;
+            }
+            
+            const fuelBar = document.getElementById('mu-fuel-fill');
+            const fuelText = document.getElementById('mu-fuel-text');
+            if (fuelBar && fuelText) {
+                let maxF = m.id === 'reactor' ? 5000 : 500;
+                fuelBar.style.width = `${Math.min(100, (m.fuel / maxF) * 100)}%`;
+                fuelText.innerText = Math.floor(m.fuel);
+            }
+            
+            const progBar = document.getElementById('mu-prog-fill');
+            const progText = document.getElementById('mu-prog-text');
+            if (progBar && progText) {
+                let pct = m.currentRecipe ? (m.progress / m.currentRecipe.time) * 100 : 0;
+                progBar.style.width = `${pct}%`;
+                progText.innerText = m.currentRecipe ? 'Processando...' : 'Aguardando Materiais / Energia';
+            }
+        }
+
+        function insertFuel(type) {
+            if (!openMachine) return;
+            if ((PlayerStats.inventory[type] || 0) > 0) {
+                if (openMachine.pushItem(world, type)) {
+                    PlayerStats.inventory[type]--;
+                    updateHUD(); renderMachineUI();
+                    showNotification(`+1 ${ITEMS[type].name} Inserido`, 'success');
+                }
+            } else {
+                showNotification(`Sem ${ITEMS[type].name} no inventário!`, 'error');
+            }
+        }
+
+        function autoInsertProcessor() {
+            if (!openMachine || !(openMachine instanceof Processor)) return;
+            let inserted = 0;
+            for (let r of RECIPES) {
+                if (r.machine === openMachine.id) {
+                    for (let [id, amount] of Object.entries(r.inputs)) {
+                        while (PlayerStats.inventory[id] > 0 && openMachine.pushItem(world, id)) {
+                            PlayerStats.inventory[id]--;
+                            inserted++;
+                        }
+                    }
+                }
+            }
+            if (inserted > 0) {
+                updateHUD(); renderMachineUI(); showNotification(`Inseriu ${inserted} itens.`);
+            } else showNotification("Sem materiais válidos para esta máquina.", "error");
+        }
+
+        function extractOutputs() {
+            if (!openMachine || !(openMachine instanceof Processor)) return;
+            if (openMachine.outputBuffer.length > 0) {
+                let collected = 0;
+                while(openMachine.outputBuffer.length > 0) {
+                    let item = openMachine.outputBuffer.shift();
+                    PlayerStats.inventory[item] = (PlayerStats.inventory[item] || 0) + 1;
+                    collected++;
+                }
+                updateHUD(); renderMachineUI(); showNotification(`Recolheu ${collected} itens.`, 'success');
+            } else showNotification("Nenhum produto pronto.", "info");
+        }
+
+        function dumpInventoryToChest() {
+            if (!openMachine || !(openMachine instanceof StorageMachine)) return;
+            let dumped = false;
+            for(let [id, count] of Object.entries(PlayerStats.inventory)) {
+                if (count > 0) {
+                    openMachine.inventory[id] = (openMachine.inventory[id] || 0) + count;
+                    PlayerStats.inventory[id] = 0;
+                    dumped = true;
+                }
+            }
+            if(dumped) { updateHUD(); renderMachineUI(); showNotification("Inventário depositado."); }
+        }
+
+        function extractFromChest(id) {
+            if (!openMachine || !(openMachine instanceof StorageMachine)) return;
+            if (openMachine.inventory[id] > 0) {
+                openMachine.inventory[id]--;
+                PlayerStats.inventory[id] = (PlayerStats.inventory[id] || 0) + 1;
+                updateHUD(); renderMachineUI();
+            }
+        }
+
+        function renderMiniInventory() {
+            const c = document.getElementById('mini-inventory');
+            c.innerHTML = '';
+            for(let [id, count] of Object.entries(PlayerStats.inventory)) {
+                if(count <= 0) continue;
+                const item = ITEMS[id];
+                const d = document.createElement('div');
+                d.className = 'slot'; d.title = item.name;
+                d.innerHTML = `<div style="width:20px;height:20px;background:${item.color};border-radius:50%"></div><span class="item-count">${count}</span>`;
+                c.appendChild(d);
+            }
+        }
+
+        function filterBuild(cat) { renderBuildMenu(cat); }
+
+        function renderBuildMenu(filterCat = 'all') {
+            const c = document.getElementById('build-list');
+            c.innerHTML = '';
+            for (let [id, m] of Object.entries(MACHINES)) {
+                if (filterCat !== 'all' && m.category !== filterCat) continue;
+                const locked = PlayerStats.level < m.reqLevel;
+                
+                const d = document.createElement('div');
+                d.className = `machine-card ${locked ? 'locked' : ''} ${PlayerStats.selectedMachine === id ? 'selected' : ''}`;
+                
+                d.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold">${m.name}</span>
+                        <span style="color:${m.color}">${m.symbol}</span>
+                    </div>
+                    <div class="text-xs text-gray-400 h-8">${m.desc}</div>
+                    <div class="flex justify-between mt-2 font-bold text-sm">
+                        <span class="${locked ? 'text-red-500' : 'text-green-400'}">Lvl ${m.reqLevel}</span>
+                        <span class="text-yellow-400">$${m.cost}</span>
+                    </div>
+                `;
+                
+                if (!locked) {
+                    d.onclick = () => {
+                        PlayerStats.selectedMachine = id;
+                        toggleBuildMenu();
+                    };
+                }
+                c.appendChild(d);
+            }
+        }
+
+        // JEI Logic
+        function renderJEIList() {
+            const list = document.getElementById('jei-list');
+            list.innerHTML = '';
+            for(let [id, item] of Object.entries(ITEMS)) {
+                const slot = document.createElement('div');
+                slot.className = 'slot';
+                slot.title = item.name;
+                slot.innerHTML = `<div style="width:24px;height:24px;background:${item.color};border-radius:${item.type==='fluid'?'50%':(item.type==='ingot'?'2px':'8px')}"></div>`;
+                slot.onclick = () => renderJEIDetails(id);
+                list.appendChild(slot);
+            }
+        }
+
+        function renderJEIDetails(itemId) {
+            const item = ITEMS[itemId];
+            const c = document.getElementById('jei-details');
+            c.innerHTML = `
+                <div class="flex items-center gap-4 border-b border-gray-600 pb-2">
+                    <div style="width:40px;height:40px;background:${item.color};border-radius:4px;"></div>
+                    <div>
+                        <h3 class="text-2xl font-bold" style="color:${item.color}">${item.name}</h3>
+                        <p class="text-gray-400">Type: ${item.type} | Sell Value: $${item.value}</p>
+                    </div>
+                </div>
+            `;
+
+            // Recipes Making This
+            const makes = RECIPES.filter(r => r.outputs[itemId]);
+            if(makes.length > 0) {
+                c.innerHTML += `<h4 class="font-bold text-lg text-blue-300 mt-2">Produced By:</h4>`;
+                makes.forEach(r => c.appendChild(createRecipeDOM(r)));
+            } else {
+                c.innerHTML += `<p class="text-gray-500 mt-2">No known crafting recipes. Mined or found.</p>`;
+            }
+
+            // Recipes Using This
+            const uses = RECIPES.filter(r => r.inputs[itemId]);
+            if(uses.length > 0) {
+                c.innerHTML += `<h4 class="font-bold text-lg text-yellow-300 mt-4">Used In:</h4>`;
+                uses.forEach(r => c.appendChild(createRecipeDOM(r)));
+            }
+        }
+
+        function createRecipeDOM(recipe) {
+            const d = document.createElement('div');
+            d.className = 'recipe-box';
+            const m = MACHINES[recipe.machine];
+            
+            let inHTML = '';
+            let inputTextList = [];
+            for(let [id, amt] of Object.entries(recipe.inputs)) {
+                const it = ITEMS[id];
+                inHTML += `<div class="flex items-center gap-1 bg-black p-1 rounded border border-gray-600" title="${it.name}">
+                    <div style="width:12px;height:12px;background:${it.color}"></div>x${amt}
+                </div>`;
+                inputTextList.push(`${amt}x ${it.name}`);
+            }
+            
+            let outHTML = '';
+            let xpTextList = [];
+            for(let [id, amt] of Object.entries(recipe.outputs)) {
+                const it = ITEMS[id];
+                outHTML += `<div class="flex items-center gap-1 bg-black p-1 rounded border border-gray-600" title="${it.name}">
+                    <div style="width:12px;height:12px;background:${it.color}"></div>x${amt}
+                </div>`;
+                
+                // Calculate XP value based on the Sell Bin formula
+                let xpPerItem = Math.max(1, Math.floor(it.value / 2));
+                let totalXp = xpPerItem * amt;
+                xpTextList.push(`${amt}x ${it.name} (+${totalXp} XP total)`);
+            }
+
+            d.innerHTML = `
+                <div class="flex items-center gap-2 mb-2 border-b border-gray-700 pb-1">
+                    <div style="width:24px;height:24px;background:${m.color};border-radius:4px;display:flex;justify-content:center;align-items:center;color:white;font-size:14px;font-weight:bold;text-shadow:1px 1px 0 #000;">${m.symbol}</div>
+                    <div class="text-sm font-bold" style="color:${m.color}">Feito em: ${m.name}</div>
+                </div>
+                <div class="recipe-row">
+                    ${inHTML} <span class="text-gray-400 font-bold mx-2">➜</span> ${outHTML}
+                </div>
+                <div class="text-xs text-gray-400 mt-2 border-t border-gray-700 pt-2">
+                    <div class="mb-1"><span class="text-gray-300 font-semibold">Requer:</span> ${inputTextList.join(', ')}</div>
+                    <div><span class="text-gray-300 font-semibold">Produz:</span> ${xpTextList.join(', ')}</div>
+                </div>
+            `;
+            return d;
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            VIEWPORT_WIDTH = canvas.width; VIEWPORT_HEIGHT = canvas.height;
+        });
+        
+        window.onload = () => {
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            VIEWPORT_WIDTH = canvas.width; VIEWPORT_HEIGHT = canvas.height;
+            updateHUD();
+            showNotification("Welcome to Industrialist 2D: Advanced!");
+            showNotification("Aperte Q para usar máquinas básicas manualmente!");
+            requestAnimationFrame(gameLoop);
+        };
+
+    </script>
+</body>
+</html>
