@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tank Warfare: Build & Battle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #1a202c; /* Tailwind gray-900 */
+            color: #e2e8f0; /* Tailwind gray-200 */
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI Overlays */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .panel {
+            pointer-events: auto;
+            background: rgba(30, 41, 59, 0.9);
+            border: 2px solid #334155;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+            padding: 1rem;
+            max-height: 95vh;
+            overflow-y: auto;
+        }
+
+        /* Main Menu / Builder UI */
+        #builder-ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 10;
+            width: 300px;
+        }
+
+        .tool-btn {
+            background-color: #475569;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            text-align: left;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tool-btn:hover { background-color: #64748b; }
+        .tool-btn.active { background-color: #3b82f6; border: 2px solid #60a5fa; }
+        
+        .action-btn {
+            background-color: #0d9488;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .action-btn:hover { background-color: #0f766e; }
+
+        .color-swatch {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: inline-block;
+            border: 1px solid white;
+        }
+
+        #action-buttons {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 15px;
+            pointer-events: auto;
+        }
+
+        .big-btn {
+            background-color: #10b981;
+            color: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        .big-btn:hover { background-color: #059669; }
+        .big-btn:active { transform: scale(0.95); }
+        .big-btn.danger { background-color: #ef4444; }
+        .big-btn.danger:hover { background-color: #dc2626; }
+
+        /* In-Game HUD */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            text-align: center;
+        }
+
+        #health-bar-container {
+            width: 300px;
+            height: 20px;
+            background-color: #334155;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid #0f172a;
+            margin-bottom: 5px;
+        }
+
+        #health-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #ef4444, #10b981);
+            transition: width 0.2s;
+        }
+
+        #ammo-status {
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        #controls-help {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            pointer-events: auto;
+        }
+
+        #message-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 3rem;
+            font-weight: bold;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.8);
+            display: none;
+            z-index: 50;
+            text-align: center;
+        }
+        
+        /* Custom scrollbar for panel */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="ui-layer">
+        <!-- Builder Interface -->
+        <div id="builder-ui" class="panel">
+            <h2 class="text-xl font-bold mb-2 border-b border-slate-600 pb-1">Oficina de Tanques</h2>
+            
+            <div class="mb-2 mt-1">
+                <p class="text-xs text-slate-400 mb-1">Passo 1: Pontos de Fixação</p>
+                <button class="tool-btn active" data-tool="node">
+                    <span class="color-swatch" style="background: #eab308; border-radius: 50%;"></span> Nó (Clique para fixar)
+                </button>
+            </div>
+
+            <div class="mb-2">
+                <p class="text-xs text-slate-400 mb-1">Passo 2: Blindagem (Arraste de um Nó a outro)</p>
+                <button class="tool-btn" data-tool="beam" data-mat="light">
+                    <span class="color-swatch" style="background: #a8a29e;"></span> Metal Leve (Rápido, Fraco)
+                </button>
+                <button class="tool-btn" data-tool="beam" data-mat="medium">
+                    <span class="color-swatch" style="background: #78716c;"></span> Blindagem Média
+                </button>
+                <button class="tool-btn" data-tool="beam" data-mat="heavy">
+                    <span class="color-swatch" style="background: #44403c;"></span> Placa Pesada (Lento, Forte)
+                </button>
+            </div>
+
+            <div class="mb-2">
+                <p class="text-xs text-slate-400 mb-1">Passo 3: Componentes do Veículo</p>
+                <button class="tool-btn" data-tool="engine">
+                    <span class="color-swatch" style="background: #ef4444; border-radius: 0;"></span> Motor (Obrigatório - WASD)
+                </button>
+                <button class="tool-btn" data-tool="wheel">
+                    <span class="color-swatch" style="background: #1c1917; border-radius: 50%;"></span> Roda Simples
+                </button>
+                <button class="tool-btn" data-tool="track">
+                    <span class="color-swatch" style="background: #334155; border-radius: 4px; width: 24px;"></span> Módulo de Esteira (Terreno)
+                </button>
+            </div>
+
+            <div>
+                <p class="text-xs text-slate-400 mb-1">Passo 4: Armamento</p>
+                <button class="tool-btn" data-tool="cannon_base">
+                    <span class="color-swatch" style="background: #0ea5e9;"></span> Base do Canhão
+                </button>
+                <button class="tool-btn" data-tool="cannon_barrel">
+                    <span class="color-swatch" style="background: #38bdf8;"></span> Cano do Canhão (Arraste)
+                </button>
+            </div>
+
+            <div class="mb-2 mt-2 border-t border-slate-600 pt-2">
+                <p class="text-xs text-slate-400 mb-1">Modificações</p>
+                <button class="tool-btn" data-tool="delete" style="background-color: #7f1d1d;">
+                    <span class="color-swatch" style="background: #f87171; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: white;">X</span> Remover Peça
+                </button>
+            </div>
+
+            <!-- Import / Export Controls -->
+            <div class="mb-1 mt-2 border-t border-slate-600 pt-2">
+                <p class="text-xs text-slate-400 mb-1">Projetos (.json)</p>
+                <div class="flex gap-2 mb-2">
+                    <button id="btn-export" class="tool-btn action-btn flex-1">Exportar</button>
+                    <button id="btn-import-trigger" class="tool-btn action-btn flex-1">Importar</button>
+                    <input type="file" id="import-file" accept=".json" style="display: none;">
+                </div>
+                <button id="btn-example" class="tool-btn action-btn w-full" style="background-color: #2563eb;">Carregar Tanque Exemplo (ex.json)</button>
+            </div>
+            
+            <div class="mt-2 text-[10px] text-yellow-400 leading-tight">
+                Dica: Construa estruturas em triângulos para maior resistência. Se o tanque travar na batalha, adicione uma Base de Canhão!
+            </div>
+        </div>
+
+        <div id="action-buttons">
+            <button id="btn-clear" class="big-btn danger">Limpar Tudo</button>
+            <button id="btn-play" class="big-btn">Lutar!</button>
+        </div>
+
+        <!-- In-Game HUD -->
+        <div id="hud">
+            <div id="health-bar-container">
+                <div id="health-bar"></div>
+            </div>
+            <div id="ammo-status">Munição: Padrão (R)</div>
+        </div>
+
+        <div id="controls-help" class="panel" style="display: none;">
+            <strong>Controles:</strong><br>
+            WASD / Setas: Mover<br>
+            Mouse: Mirar<br>
+            Botão Esq: Atirar<br>
+            R: Munição Padrão<br>
+            T: Munição Explosiva
+        </div>
+
+        <div id="message-overlay"></div>
+    </div>
+</div>
+
+<script>
+const Engine = Matter.Engine,
+      Render = Matter.Render,
+      Runner = Matter.Runner,
+      Bodies = Matter.Bodies,
+      Composite = Matter.Composite,
+      Constraint = Matter.Constraint,
+      Mouse = Matter.Mouse,
+      MouseConstraint = Matter.MouseConstraint,
+      Events = Matter.Events,
+      Vector = Matter.Vector,
+      Body = Matter.Body,
+      Query = Matter.Query;
+
+const GAME_STATE = { BUILD: 0, PLAY: 1, OVER: 2 };
+let currentState = GAME_STATE.BUILD;
+
+const engine = Engine.create();
+engine.world.gravity.y = 1.5;
+
+const render = Render.create({
+    element: document.getElementById('game-container'),
+    engine: engine,
+    options: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        wireframes: false,
+        background: '#1e293b',
+        hasBounds: true
+    }
+});
+
+Render.run(render);
+const runner = Runner.create();
+Runner.run(runner, engine);
+
+// Collision Categories & Groups
+const cat = {
+    DEFAULT: 0x0001,
+    TANK_PART: 0x0002,
+    WHEEL: 0x0004,
+    PROJECTILE: 0x0008,
+    TERRAIN: 0x0010,
+    ENEMY: 0x0020
+};
+
+// Player body group - negative groups NEVER collide with themselves! Fixes internal spazzing.
+const PLAYER_GROUP = -1; 
+
+// Builder State & Blueprint System
+let currentTool = 'node';
+let currentMaterial = 'light';
+let startNode = null; 
+let tempBuildNodes = [];
+
+let structuralNodes = [];
+let playerTankParts = [];
+let playerConstraints = [];
+let engineBlock = null;
+let cannonBase = null;
+let cannonBarrel = null;
+
+// Blueprint stores creation actions to easily Export/Import
+let tankBlueprint = [];
+
+const materials = {
+    light: { color: '#a8a29e', density: 0.001, strength: 50 },
+    medium: { color: '#78716c', density: 0.003, strength: 100 },
+    heavy: { color: '#44403c', density: 0.008, strength: 250 }
+};
+
+let ammoType = 'R';
+let lastFireTime = 0;
+let fireCooldown = 500;
+let enemies = [];
+let playerHealth = 100;
+let maxPlayerHealth = 100;
+
+// Mouse setup
+const mouse = Mouse.create(render.canvas);
+const mouseConstraint = MouseConstraint.create(engine, {
+    mouse: mouse,
+    constraint: { stiffness: 0.2, render: { visible: false } }
+});
+Composite.add(engine.world, mouseConstraint);
+render.mouse = mouse;
+
+Events.on(render, 'beforeRender', function() {
+    Mouse.setOffset(mouse, render.bounds.min);
+});
+
+// UI Event Listeners
+document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        currentTool = e.currentTarget.dataset.tool;
+        if(e.currentTarget.dataset.mat) currentMaterial = e.currentTarget.dataset.mat;
+        startNode = null;
+        tempBuildNodes.forEach(n => Composite.remove(engine.world, n));
+        tempBuildNodes = [];
+    });
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => { clearBuildArea(); tankBlueprint = []; });
+document.getElementById('btn-play').addEventListener('click', startGame);
+
+window.addEventListener('resize', () => {
+    render.canvas.width = window.innerWidth;
+    render.canvas.height = window.innerHeight;
+    render.options.width = window.innerWidth;
+    render.options.height = window.innerHeight;
+});
+
+const keys = {};
+window.addEventListener('keydown', (e) => {
+    keys[e.key.toLowerCase()] = true;
+    if(currentState === GAME_STATE.PLAY) {
+        if(e.key.toLowerCase() === 'r') { ammoType = 'R'; updateAmmoUI(); }
+        if(e.key.toLowerCase() === 't') { ammoType = 'T'; updateAmmoUI(); }
+    }
+});
+window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+
+let groundBlocks = [];
+function createEnvironment() {
+    groundBlocks.forEach(b => Composite.remove(engine.world, b));
+    groundBlocks = [];
+    const groundOpts = { 
+        isStatic: true, friction: 0.8, 
+        collisionFilter: { category: cat.TERRAIN }, render: { fillStyle: '#3f6212' } 
+    };
+
+    let buildPlatform = Bodies.rectangle(window.innerWidth/2, window.innerHeight - 50, window.innerWidth, 100, groundOpts);
+    groundBlocks.push(buildPlatform);
+
+    let lastX = window.innerWidth;
+    let lastY = window.innerHeight - 50;
+    
+    for(let i=0; i<40; i++) {
+        let width = 300 + Math.random() * 400;
+        let heightChange = (Math.random() - 0.5) * 200;
+        let newY = lastY + heightChange;
+        if(newY > window.innerHeight + 100) newY = window.innerHeight;
+        if(newY < window.innerHeight - 500) newY = window.innerHeight - 300;
+
+        let angle = Math.atan2(newY - lastY, width);
+        let cx = lastX + width/2;
+        let cy = (lastY + newY)/2;
+        
+        let hill = Bodies.rectangle(cx, cy, Math.sqrt(width*width + heightChange*heightChange), 150, { ...groundOpts, angle: angle });
+        groundBlocks.push(hill);
+        lastX += width;
+        lastY = newY;
+    }
+
+    let leftWall = Bodies.rectangle(-50, window.innerHeight/2, 100, window.innerHeight*3, groundOpts);
+    let rightWall = Bodies.rectangle(lastX + 50, window.innerHeight/2, 100, window.innerHeight*3, groundOpts);
+    groundBlocks.push(leftWall, rightWall);
+
+    Composite.add(engine.world, groundBlocks);
+}
+
+const GRID_SIZE = 20;
+function snapToGrid(val) { return Math.round(val / GRID_SIZE) * GRID_SIZE; }
+function generateId() { return Math.random().toString(36).substring(2) + Date.now().toString(36); }
+
+function findNearestNode(x, y, radius = 25) {
+    let closest = null;
+    let minDist = radius;
+    for (let node of structuralNodes) {
+        let dx = node.position.x - x;
+        let dy = node.position.y - y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < minDist) {
+            minDist = dist;
+            closest = node;
+        }
+    }
+    return closest;
+}
+
+Events.on(mouseConstraint, 'mousedown', function(event) {
+    if(currentState !== GAME_STATE.BUILD) return;
+
+    let mousePos = event.mouse.position;
+    let x = snapToGrid(mousePos.x);
+    let y = snapToGrid(mousePos.y);
+
+    if(y > window.innerHeight - 150) y = snapToGrid(window.innerHeight - 150);
+
+    if (currentTool === 'delete') {
+        let allBodies = [...playerTankParts, ...tempBuildNodes];
+        if(engineBlock) allBodies.push(engineBlock);
+        if(cannonBase) allBodies.push(cannonBase);
+        if(cannonBarrel) allBodies.push(cannonBarrel);
+        allBodies = [...new Set(allBodies)];
+
+        let clicked = Query.point(allBodies, {x: mousePos.x, y: mousePos.y});
+        if(clicked.length > 0) {
+            let target = clicked[0];
+            let partId = target.plugin.partId;
+            if(partId) removePartById(partId);
+        }
+    } else if (currentTool === 'node') {
+        if (!findNearestNode(x, y, 10)) {
+            let act = { action: 'node', id: generateId(), x, y };
+            tankBlueprint.push(act);
+            executeAction(act);
+        }
+    } else if(currentTool === 'beam') {
+        let nodeBody = findNearestNode(x, y);
+        let currentPoint = nodeBody ? { x: nodeBody.position.x, y: nodeBody.position.y, isNode: true } : { x: x, y: y, isNode: false };
+
+        if(!startNode) {
+            startNode = currentPoint;
+            if (!startNode.isNode) {
+                let tempNode = Bodies.circle(x, y, 4, { isStatic:true, render:{fillStyle:'rgba(255,255,0,0.5)'} });
+                Composite.add(engine.world, tempNode);
+                tempBuildNodes.push(tempNode);
+            }
+        } else {
+            let endNode = currentPoint;
+            if (startNode.x !== endNode.x || startNode.y !== endNode.y) {
+                let act = { action: 'beam', id: generateId(), start: startNode, end: endNode, matKey: currentMaterial };
+                tankBlueprint.push(act);
+                executeAction(act);
+            }
+            tempBuildNodes.forEach(n => Composite.remove(engine.world, n));
+            tempBuildNodes = [];
+            startNode = null;
+        }
+    } else if (currentTool === 'engine') {
+        if(!engineBlock) {
+            let act = { action: 'engine', id: generateId(), x, y };
+            tankBlueprint.push(act);
+            executeAction(act);
+        } else showMessage("Já existe um motor!", 2000);
+    } else if (currentTool === 'wheel') {
+        let act = { action: 'wheel', id: generateId(), x, y };
+        tankBlueprint.push(act);
+        executeAction(act);
+    } else if (currentTool === 'track') {
+        let act = { action: 'track', id: generateId(), x, y };
+        tankBlueprint.push(act);
+        executeAction(act);
+    } else if (currentTool === 'cannon_base') {
+        if(!cannonBase) {
+            let act = { action: 'cannon_base', id: generateId(), x, y };
+            tankBlueprint.push(act);
+            executeAction(act);
+        }
+    } else if (currentTool === 'cannon_barrel') {
+        if(cannonBase && !cannonBarrel) {
+            let dx = x - cannonBase.position.x;
+            let dy = y - cannonBase.position.y;
+            if(Math.sqrt(dx*dx + dy*dy) >= 20) {
+                let act = { action: 'cannon_barrel', id: generateId(), x: cannonBase.position.x, y: cannonBase.position.y, dx, dy };
+                tankBlueprint.push(act);
+                executeAction(act);
+            }
+        } else if(!cannonBase) showMessage("Coloque a Base do Canhão primeiro!", 2000);
+    }
+});
+
+// Shared properties for all player parts to prevent self-collision
+const playerFilter = { group: PLAYER_GROUP, category: cat.TANK_PART, mask: cat.DEFAULT | cat.TERRAIN | cat.ENEMY | cat.PROJECTILE };
+const playerWheelFilter = { group: PLAYER_GROUP, category: cat.WHEEL, mask: cat.TERRAIN | cat.DEFAULT | cat.ENEMY | cat.PROJECTILE };
+
+function executeAction(act) {
+    if(act.action === 'node') {
+        let node = Bodies.circle(act.x, act.y, 8, {
+            isStatic: true, density: 0.05, collisionFilter: playerFilter,
+            render: { fillStyle: '#eab308' }, label: 'node', plugin: { partId: act.id, strength: 150 }
+        });
+        structuralNodes.push(node);
+        playerTankParts.push(node);
+        Composite.add(engine.world, node);
+        autoConnectNearest(node);
+    } 
+    else if(act.action === 'beam') {
+        let dx = act.end.x - act.start.x;
+        let dy = act.end.y - act.start.y;
+        let length = Math.sqrt(dx*dx + dy*dy);
+        let cx = act.start.x + dx/2, cy = act.start.y + dy/2;
+        let angle = Math.atan2(dy, dx);
+        let mat = materials[act.matKey] || materials['light'];
+
+        let beam = Bodies.rectangle(cx, cy, length, 12, {
+            isStatic: true, angle: angle, density: mat.density, collisionFilter: playerFilter,
+            render: { fillStyle: mat.color }, label: 'beam', plugin: { partId: act.id, strength: mat.strength }
+        });
+        playerTankParts.push(beam);
+        Composite.add(engine.world, beam);
+        
+        // Attach exactly to existing nodes if possible
+        let startNodeBody = act.start.isNode ? findNearestNode(act.start.x, act.start.y, 5) : null;
+        let endNodeBody = act.end.isNode ? findNearestNode(act.end.x, act.end.y, 5) : null;
+        
+        if (startNodeBody) connectParts(beam, startNodeBody, {x: -length/2, y: 0});
+        if (endNodeBody) connectParts(beam, endNodeBody, {x: length/2, y: 0});
+        autoConnectNearest(beam);
+    }
+    else if(act.action === 'engine') {
+        engineBlock = Bodies.rectangle(act.x, act.y, 40, 40, {
+            isStatic: true, density: 0.05, collisionFilter: playerFilter,
+            render: { fillStyle: '#ef4444' }, label: 'engine', plugin: { partId: act.id }
+        });
+        playerTankParts.push(engineBlock);
+        Composite.add(engine.world, engineBlock);
+        autoConnectNearest(engineBlock);
+    }
+    else if(act.action === 'wheel') {
+        let wheel = Bodies.circle(act.x, act.y, 30, {
+            isStatic: true, friction: 0.9, restitution: 0.1, density: 0.01, collisionFilter: playerWheelFilter,
+            render: { fillStyle: '#1c1917', strokeStyle: '#d6d3d1', lineWidth: 4 }, label: 'player_wheel', plugin: { partId: act.id }
+        });
+        playerTankParts.push(wheel);
+        Composite.add(engine.world, wheel);
+        autoConnectNearest(wheel, true);
+    }
+    else if(act.action === 'track') {
+        let trackChassis = Bodies.rectangle(act.x, act.y, 110, 15, {
+            isStatic: true, density: 0.05, collisionFilter: playerFilter, 
+            label: 'track_chassis', render: {fillStyle: '#334155'}, plugin: { partId: act.id, strength: 150 }
+        });
+        let wL = Bodies.circle(act.x - 35, act.y + 5, 20, {
+            isStatic: true, friction: 1.0, density: 0.01, collisionFilter: playerWheelFilter, 
+            label: 'player_wheel', render: {fillStyle: '#1c1917'}, plugin: { partId: act.id }
+        });
+        let wR = Bodies.circle(act.x + 35, act.y + 5, 20, {
+            isStatic: true, friction: 1.0, density: 0.01, collisionFilter: playerWheelFilter, 
+            label: 'player_wheel', render: {fillStyle: '#1c1917'}, plugin: { partId: act.id }
+        });
+        
+        let cL = Constraint.create({ bodyA: trackChassis, bodyB: wL, pointA: {x:-35, y:5}, stiffness: 0.8, length: 0 });
+        let cR = Constraint.create({ bodyA: trackChassis, bodyB: wR, pointA: {x:35, y:5}, stiffness: 0.8, length: 0 });
+
+        playerTankParts.push(trackChassis, wL, wR);
+        playerConstraints.push(cL, cR);
+        Composite.add(engine.world, [trackChassis, wL, wR, cL, cR]);
+        autoConnectNearest(trackChassis, false);
+    }
+    else if(act.action === 'cannon_base') {
+        cannonBase = Bodies.circle(act.x, act.y, 15, {
+            isStatic: true, density: 0.02, collisionFilter: playerFilter,
+            render: { fillStyle: '#0ea5e9' }, label: 'cannon_base', plugin: { partId: act.id }
+        });
+        playerTankParts.push(cannonBase);
+        Composite.add(engine.world, cannonBase);
+        autoConnectNearest(cannonBase);
+    }
+    else if(act.action === 'cannon_barrel') {
+        let length = Math.sqrt(act.dx*act.dx + act.dy*act.dy);
+        let cx = act.x + act.dx/2;
+        let cy = act.y + act.dy/2;
+        let angle = Math.atan2(act.dy, act.dx);
+
+        cannonBarrel = Bodies.rectangle(cx, cy, length, 15, {
+            isStatic: true, angle: angle, density: 0.01, collisionFilter: playerFilter,
+            render: { fillStyle: '#38bdf8' }, label: 'cannon_barrel', plugin: { partId: act.id }
+        });
+        
+        // Find cannon base to connect to
+        let base = playerTankParts.find(p => p.label === 'cannon_base');
+        if(base) {
+            let constraint = Constraint.create({
+                bodyA: base, bodyB: cannonBarrel, pointA: {x:0, y:0}, pointB: {x: -length/2, y:0},
+                stiffness: 1, length: 0, render: { visible: false }
+            });
+            playerConstraints.push(constraint);
+            Composite.add(engine.world, [constraint]);
+        }
+        playerTankParts.push(cannonBarrel);
+        Composite.add(engine.world, cannonBarrel);
+    }
+}
+
+function connectParts(bodyA, bodyB, offsetA = {x:0, y:0}) {
+    let c = Constraint.create({ bodyA, bodyB, pointA: offsetA, stiffness: 1, damping: 0.1, render: { visible: false } });
+    playerConstraints.push(c);
+    Composite.add(engine.world, c);
+}
+
+function autoConnectNearest(newBody, isWheel = false) {
+    playerTankParts.forEach(part => {
+        if(part === newBody || part.plugin.partId === newBody.plugin.partId) return; // don't self-connect track parts
+
+        let boundsOverlap = Matter.Bounds.overlaps(newBody.bounds, part.bounds);
+        let d = Vector.magnitude(Vector.sub(newBody.position, part.position));
+        let threshold = isWheel ? 60 : 50; 
+        
+        if(boundsOverlap || d < threshold) {
+            let cOpts = { bodyA: newBody, bodyB: part, stiffness: 1, damping: 0.1, render: { visible: false } };
+            if(isWheel) { cOpts.stiffness = 0.8; cOpts.length = 0; }
+            let c = Constraint.create(cOpts);
+            playerConstraints.push(c);
+            Composite.add(engine.world, c);
+        }
+    });
+}
+
+function removePartById(id) {
+    tankBlueprint = tankBlueprint.filter(act => act.id !== id);
+
+    let bodiesToRemove = playerTankParts.filter(b => b.plugin.partId === id);
+    let constraintsToRemove = playerConstraints.filter(c => 
+        (c.bodyA && c.bodyA.plugin.partId === id) || (c.bodyB && c.bodyB.plugin.partId === id)
+    );
+
+    bodiesToRemove.forEach(b => {
+        if(b === engineBlock) engineBlock = null;
+        if(b === cannonBase) cannonBase = null;
+        if(b === cannonBarrel) cannonBarrel = null;
+        Composite.remove(engine.world, b);
+    });
+    constraintsToRemove.forEach(c => Composite.remove(engine.world, c));
+
+    playerTankParts = playerTankParts.filter(b => b.plugin.partId !== id);
+    structuralNodes = structuralNodes.filter(b => b.plugin.partId !== id);
+    playerConstraints = playerConstraints.filter(c => !constraintsToRemove.includes(c));
+}
+
+function clearBuildArea() {
+    playerTankParts.forEach(p => Composite.remove(engine.world, p));
+    playerConstraints.forEach(c => Composite.remove(engine.world, c));
+    tempBuildNodes.forEach(n => Composite.remove(engine.world, n));
+    structuralNodes = [];
+    playerTankParts = [];
+    playerConstraints = [];
+    tempBuildNodes = [];
+    engineBlock = null;
+    cannonBase = null;
+    cannonBarrel = null;
+    startNode = null;
+}
+
+document.getElementById('btn-export').addEventListener('click', () => {
+    if(tankBlueprint.length === 0) { showMessage("Tanque vazio!", 1500); return; }
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tankBlueprint, null, 2));
+    const a = document.createElement('a');
+    a.href = dataStr;
+    a.download = "meu_tanque.json";
+    a.click();
+});
+
+document.getElementById('btn-import-trigger').addEventListener('click', () => document.getElementById('import-file').click());
+
+document.getElementById('import-file').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try { loadBlueprint(JSON.parse(e.target.result)); }
+        catch(err) { showMessage("Erro no arquivo JSON", 3000); }
+    };
+    reader.readAsText(file);
+    this.value = ''; // Reset
+});
+
+document.getElementById('btn-example').addEventListener('click', () => {
+    const exampleTank = [
+        {"action":"node","id":"n1","x":0,"y":0},
+        {"action":"node","id":"n2","x":100,"y":0},
+        {"action":"node","id":"n3","x":100,"y":-40},
+        {"action":"node","id":"n4","x":0,"y":-40},
+        {"action":"beam","id":"b1","start":{"x":0,"y":0,"isNode":true},"end":{"x":100,"y":0,"isNode":true},"matKey":"heavy"},
+        {"action":"beam","id":"b2","start":{"x":100,"y":0,"isNode":true},"end":{"x":100,"y":-40,"isNode":true},"matKey":"heavy"},
+        {"action":"beam","id":"b3","start":{"x":100,"y":-40,"isNode":true},"end":{"x":0,"y":-40,"isNode":true},"matKey":"heavy"},
+        {"action":"beam","id":"b4","start":{"x":0,"y":-40,"isNode":true},"end":{"x":0,"y":0,"isNode":true},"matKey":"heavy"},
+        {"action":"beam","id":"b5","start":{"x":0,"y":0,"isNode":true},"end":{"x":100,"y":-40,"isNode":true},"matKey":"medium"},
+        {"action":"engine","id":"e1","x":50,"y":-20},
+        {"action":"track","id":"t1","x":50,"y":10},
+        {"action":"cannon_base","id":"c1","x":50,"y":-50},
+        {"action":"cannon_barrel","id":"c2","x":50,"y":-50,"dx":80,"dy":0}
+    ];
+    loadBlueprint(exampleTank);
+});
+
+function loadBlueprint(data) {
+    clearBuildArea();
+    tankBlueprint = [];
+    
+    // Auto-center imported tank
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    
+    data.forEach(act => {
+        if(act.x !== undefined) { minX = Math.min(minX, act.x); maxX = Math.max(maxX, act.x); }
+        if(act.start) { minX = Math.min(minX, act.start.x, act.end.x); maxX = Math.max(maxX, act.start.x, act.end.x); }
+        if(act.y !== undefined) { minY = Math.min(minY, act.y); maxY = Math.max(maxY, act.y); }
+        if(act.start) { minY = Math.min(minY, act.start.y, act.end.y); maxY = Math.max(maxY, act.start.y, act.end.y); }
+    });
+
+    const bpCenterX = (minX + maxX) / 2;
+    const bpCenterY = (minY + maxY) / 2;
+    
+    const screenCenterX = snapToGrid(window.innerWidth / 2);
+    const screenCenterY = snapToGrid(window.innerHeight - 200); 
+    
+    const offsetX = screenCenterX - bpCenterX;
+    const offsetY = screenCenterY - bpCenterY;
+
+    data.forEach(act => {
+        let a = JSON.parse(JSON.stringify(act)); // deep copy
+        if(a.x !== undefined) a.x = snapToGrid(a.x + offsetX);
+        if(a.y !== undefined) a.y = snapToGrid(a.y + offsetY);
+        if(a.start) {
+            a.start.x = snapToGrid(a.start.x + offsetX);
+            a.start.y = snapToGrid(a.start.y + offsetY);
+            a.end.x = snapToGrid(a.end.x + offsetX);
+            a.end.y = snapToGrid(a.end.y + offsetY);
+        }
+        
+        tankBlueprint.push(a);
+        executeAction(a);
+    });
+}
+
+function startGame() {
+    if(!engineBlock) { showMessage("Coloque um Motor (Vermelho)!", 3000); return; }
+    if(playerTankParts.length < 3) { showMessage("Construa mais peças!", 2000); return; }
+
+    currentState = GAME_STATE.PLAY;
+    document.getElementById('ui-layer').style.backgroundColor = 'transparent';
+    document.getElementById('builder-ui').style.display = 'none';
+    document.getElementById('action-buttons').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
+    document.getElementById('controls-help').style.display = 'block';
+
+    maxPlayerHealth = 0;
+    playerTankParts.forEach(part => {
+        Body.setStatic(part, false); // Wake up physics
+        if(part.label === 'beam' || part.label === 'track_chassis' || part.label === 'node') {
+            maxPlayerHealth += (part.plugin.strength || 50);
+        }
+    });
+    maxPlayerHealth += 500; // Base engine health
+    playerHealth = maxPlayerHealth;
+    updateHealthUI();
+    mouseConstraint.collisionFilter.mask = 0; // Disable dragging in play
+
+    spawnEnemies();
+}
+
+function updateAmmoUI() {
+    let t = document.getElementById('ammo-status');
+    t.innerText = ammoType === 'R' ? "Munição: Padrão (R)" : "Munição: Explosiva (T)";
+    t.style.color = ammoType === 'R' ? '#94a3b8' : '#ef4444';
+}
+
+Events.on(engine, 'beforeUpdate', function() {
+    if(currentState !== GAME_STATE.PLAY) return;
+
+    // Movement applied to wheels and engine to prevent getting stuck
+    let moveForce = 0.06;
+    if(engineBlock && engineBlock.parent) {
+        let wheels = playerTankParts.filter(p => p.label === 'player_wheel');
+        
+        if(keys['d'] || keys['arrowright']) {
+            wheels.forEach(w => Body.setAngularVelocity(w, w.angularVelocity + 0.15));
+            Body.applyForce(engineBlock, engineBlock.position, {x: moveForce, y: 0});
+        }
+        if(keys['a'] || keys['arrowleft']) {
+            wheels.forEach(w => Body.setAngularVelocity(w, w.angularVelocity - 0.15));
+            Body.applyForce(engineBlock, engineBlock.position, {x: -moveForce, y: 0});
+        }
+        
+        // Stabilize flip
+        if(engineBlock.angle > 0.6) Body.setAngularVelocity(engineBlock, engineBlock.angularVelocity - 0.02);
+        if(engineBlock.angle < -0.6) Body.setAngularVelocity(engineBlock, engineBlock.angularVelocity + 0.02);
+    }
+
+    // Aiming
+    if(cannonBase && cannonBarrel) {
+        let mousePos = mouse.position;
+        let worldX = mousePos.x + render.bounds.min.x;
+        let worldY = mousePos.y + render.bounds.min.y;
+
+        let dx = worldX - cannonBase.position.x;
+        let dy = worldY - cannonBase.position.y;
+        let targetAngle = Math.atan2(dy, dx);
+        
+        let diff = targetAngle - cannonBarrel.angle;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+
+        Body.setAngularVelocity(cannonBarrel, diff * 0.15);
+    }
+
+    // Firing
+    if(mouse.button === 0 && cannonBarrel) {
+        let now = Date.now();
+        if(now - lastFireTime > fireCooldown) {
+            fireProjectile(cannonBarrel, ammoType, false);
+            lastFireTime = now;
+        }
+    }
+
+    // Camera
+    if(engineBlock) {
+        let targetX = engineBlock.position.x;
+        let targetY = engineBlock.position.y - 100;
+        let hw = window.innerWidth / 2, hh = window.innerHeight / 2;
+        let currentMinX = render.bounds.min.x, currentMinY = render.bounds.min.y;
+        let destMinX = targetX - hw, destMinY = targetY - hh;
+
+        Render.lookAt(render, {
+            min: { x: currentMinX + (destMinX - currentMinX) * 0.1, y: currentMinY + (destMinY - currentMinY) * 0.1 },
+            max: { x: currentMinX + (destMinX - currentMinX) * 0.1 + window.innerWidth, y: currentMinY + (destMinY - currentMinY) * 0.1 + window.innerHeight }
+        });
+    }
+
+    updateEnemies();
+});
+
+function fireProjectile(barrel, type, isEnemy) {
+    let length = Math.max(barrel.bounds.max.x - barrel.bounds.min.x, barrel.bounds.max.y - barrel.bounds.min.y);
+    let offset = length / 2 + 15; // Spawns outside barrel to prevent self damage
+    let spawnX = barrel.position.x + Math.cos(barrel.angle) * offset;
+    let spawnY = barrel.position.y + Math.sin(barrel.angle) * offset;
+
+    let projOptions = {
+        frictionAir: 0.01, restitution: 0.2, density: type === 'T' ? 0.05 : 0.02,
+        collisionFilter: {
+            category: cat.PROJECTILE,
+            mask: isEnemy ? (cat.TERRAIN | cat.TANK_PART | cat.WHEEL | cat.DEFAULT) : (cat.TERRAIN | cat.ENEMY | cat.DEFAULT)
+        },
+        label: isEnemy ? 'proj_enemy' : 'proj_player',
+        plugin: { damage: type === 'T' ? 250 : 80, explosive: type === 'T' }
+    };
+
+    let projectile = type === 'T' 
+        ? Bodies.circle(spawnX, spawnY, 8, {...projOptions, render: {fillStyle: '#ef4444'}})
+        : Bodies.rectangle(spawnX, spawnY, 15, 5, {...projOptions, angle: barrel.angle, render: {fillStyle: '#eab308'}});
+
+    let speed = type === 'T' ? 0.08 : 0.15;
+    let force = { x: Math.cos(barrel.angle) * speed * projectile.mass, y: Math.sin(barrel.angle) * speed * projectile.mass };
+
+    Composite.add(engine.world, projectile);
+    Body.applyForce(projectile, projectile.position, force);
+
+    if(barrel.parent && !isEnemy) Body.applyForce(barrel.parent, barrel.position, {x: -force.x * 0.1, y: -force.y * 0.1});
+}
+
+Events.on(engine, 'collisionStart', function(event) {
+    event.pairs.forEach(pair => {
+        handleProjectileCollision(pair.bodyA, pair.bodyB);
+        handleProjectileCollision(pair.bodyB, pair.bodyA);
+    });
+});
+
+function handleProjectileCollision(proj, target) {
+    if(proj.label.startsWith('proj_')) {
+        let isPlayerProj = proj.label === 'proj_player';
+        let damage = proj.plugin.damage || 50;
+
+        if(proj.plugin.explosive) createExplosion(proj.position, 120, damage, isPlayerProj);
+        else applyDamage(target, damage, isPlayerProj);
+
+        Composite.remove(engine.world, proj);
+    }
+}
+
+function createExplosion(position, radius, damage, isPlayerProj) {
+    let explosion = Bodies.circle(position.x, position.y, radius, { isSensor: true, isStatic: true, render: { fillStyle: 'rgba(239, 68, 68, 0.5)' } });
+    Composite.add(engine.world, explosion);
+    setTimeout(() => Composite.remove(engine.world, explosion), 100);
+
+    Composite.allBodies(engine.world).forEach(body => {
+        if(body === explosion || body.label === 'terrain') return;
+        let dist = Vector.magnitude(Vector.sub(body.position, position));
+        if(dist < radius) {
+            let forceMag = (radius - dist) / radius * 0.05 * body.mass;
+            let dir = Vector.normalise(Vector.sub(body.position, position));
+            Body.applyForce(body, body.position, Vector.mult(dir, forceMag));
+            applyDamage(body, damage * (1 - dist/radius), isPlayerProj);
+        }
+    });
+}
+
+function applyDamage(body, amount, fromPlayer) {
+    if(currentState !== GAME_STATE.PLAY) return;
+
+    if(body.label === 'engine') {
+        playerHealth -= amount;
+        updateHealthUI();
+        if(playerHealth <= 0) gameOver(false);
+    } else if(playerTankParts.includes(body)) {
+        body.plugin.health = (body.plugin.health || body.plugin.strength || 100) - amount;
+        if(body.plugin.health <= 0) {
+            playerConstraints = playerConstraints.filter(c => {
+                if(c.bodyA === body || c.bodyB === body) { Composite.remove(engine.world, c); return false; }
+                return true;
+            });
+            body.render.fillStyle = '#1e293b'; 
+            body.collisionFilter.category = cat.DEFAULT; 
+        }
+    } else if(body.label.startsWith('enemy') && fromPlayer) {
+        let enemy = enemies.find(e => e.parts.includes(body));
+        if(enemy) {
+            enemy.health -= amount;
+            if(enemy.health <= 0) destroyEnemy(enemy);
+        }
+    }
+}
+
+function spawnEnemies() {
+    let startX = window.innerWidth + 500;
+    
+    for(let i=0; i<4; i++) {
+        let x = startX + i * 1500;
+        let y = window.innerHeight - 300;
+        
+        // UNIQUE NEGATIVE GROUP for each enemy so they don't collide with themselves!
+        let enemyGroup = Body.nextGroup(false); 
+        let eFilter = { group: enemyGroup, category: cat.ENEMY, mask: cat.TERRAIN | cat.DEFAULT | cat.PROJECTILE | cat.TANK_PART };
+
+        let hull = Bodies.rectangle(x, y, 100, 40, { density: 0.01, collisionFilter: eFilter, render: { fillStyle: '#b91c1c' }, label: 'enemy_hull' });
+        let turret = Bodies.rectangle(x, y - 30, 40, 20, { density: 0.005, collisionFilter: eFilter, render: { fillStyle: '#991b1b' }, label: 'enemy_turret' });
+        let barrel = Bodies.rectangle(x + 30, y - 30, 60, 10, { density: 0.001, collisionFilter: eFilter, render: { fillStyle: '#7f1d1d' }, label: 'enemy_barrel' });
+        let w1 = Bodies.circle(x - 30, y + 25, 20, { friction: 0.9, density: 0.01, collisionFilter: eFilter, render:{fillStyle:'#000'}, label:'enemy_wheel' });
+        let w2 = Bodies.circle(x + 30, y + 25, 20, { friction: 0.9, density: 0.01, collisionFilter: eFilter, render:{fillStyle:'#000'}, label:'enemy_wheel' });
+
+        let c1 = Constraint.create({ bodyA: hull, bodyB: turret, stiffness: 0.8, length: 30 });
+        let c2 = Constraint.create({ bodyA: turret, bodyB: barrel, pointA: {x:0, y:0}, pointB: {x:-30, y:0}, stiffness: 1, length: 0 });
+        let c3 = Constraint.create({ bodyA: hull, bodyB: w1, pointA: {x:-30, y:15}, stiffness: 0.5, length: 10 });
+        let c4 = Constraint.create({ bodyA: hull, bodyB: w2, pointA: {x:30, y:15}, stiffness: 0.5, length: 10 });
+
+        let parts = [hull, turret, barrel, w1, w2];
+        let constraints = [c1, c2, c3, c4];
+        Composite.add(engine.world, [...parts, ...constraints]);
+
+        enemies.push({ hull, barrel, wheels: [w1, w2], parts, constraints, health: 300, lastFire: 0, fireRate: 1500 + Math.random() * 1000 });
+    }
+}
+
+function updateEnemies() {
+    let now = Date.now();
+    enemies.forEach(enemy => {
+        if(!engineBlock) return;
+        
+        let distX = engineBlock.position.x - enemy.hull.position.x;
+        
+        if(Math.abs(distX) > 600) {
+            let dir = Math.sign(distX);
+            enemy.wheels.forEach(w => Body.setAngularVelocity(w, w.angularVelocity + dir * 0.1));
+            if(enemy.hull.angle > 0.2) Body.setAngularVelocity(enemy.hull, enemy.hull.angularVelocity - 0.05);
+            if(enemy.hull.angle < -0.2) Body.setAngularVelocity(enemy.hull, enemy.hull.angularVelocity + 0.05);
+        } else {
+            enemy.wheels.forEach(w => Body.setAngularVelocity(w, w.angularVelocity * 0.9));
+            let dy = engineBlock.position.y - enemy.barrel.position.y;
+            let targetAngle = Math.atan2(dy, distX);
+            
+            let diff = targetAngle - enemy.barrel.angle;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            
+            Body.setAngularVelocity(enemy.barrel, diff * 0.05);
+
+            if(now - enemy.lastFire > enemy.fireRate && Math.abs(diff) < 0.2) {
+                fireProjectile(enemy.barrel, 'R', true);
+                enemy.lastFire = now;
+            }
+        }
+    });
+}
+
+function destroyEnemy(enemy) {
+    enemy.constraints.forEach(c => Composite.remove(engine.world, c));
+    enemy.parts.forEach(p => p.render.fillStyle = '#450a0a');
+    createExplosion(enemy.hull.position, 150, 0, false); 
+    
+    enemies = enemies.filter(e => e !== enemy);
+    if(enemies.length === 0) gameOver(true);
+}
+
+function updateHealthUI() {
+    let pct = Math.max(0, (playerHealth / maxPlayerHealth) * 100);
+    document.getElementById('health-bar').style.width = pct + '%';
+    if(pct < 30) document.getElementById('health-bar').style.background = '#ef4444'; 
+}
+
+function showMessage(msg, duration = 3000) {
+    let overlay = document.getElementById('message-overlay');
+    overlay.innerText = msg;
+    overlay.style.display = 'block';
+    if(duration > 0) setTimeout(() => { if(currentState !== GAME_STATE.OVER) overlay.style.display = 'none'; }, duration);
+}
+
+function gameOver(win) {
+    currentState = GAME_STATE.OVER;
+    showMessage(win ? "VITÓRIA!\nTanques Inimigos Destruídos" : "DERROTA!\nMotor Destruído", 0);
+    document.getElementById('message-overlay').style.color = win ? '#10b981' : '#ef4444';
+    
+    let btn = document.createElement('button');
+    btn.className = 'big-btn mt-4';
+    btn.innerText = 'Construir Novamente';
+    btn.onclick = () => location.reload();
+    document.getElementById('message-overlay').appendChild(document.createElement('br'));
+    document.getElementById('message-overlay').appendChild(btn);
+}
+
+createEnvironment();
+</script>
+</body>
+</html>
