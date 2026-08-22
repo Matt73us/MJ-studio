@@ -1,0 +1,1822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tank Warfare: Destructible 2D</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #222;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            user-select: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .panel {
+            background: rgba(20, 20, 20, 0.9);
+            border: 2px solid #555;
+            border-radius: 8px;
+            padding: 15px;
+            pointer-events: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            color: #eee;
+        }
+
+        #builder-menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 700px;
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            pointer-events: auto;
+        }
+
+        .builder-left {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .builder-right {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        h2, h3 { margin-top: 0; margin-bottom: 10px; text-align: center; color: #fff;}
+        
+        .part-list {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #444;
+            padding: 5px;
+            background: #111;
+        }
+
+        .part-item {
+            padding: 8px;
+            background: #333;
+            cursor: pointer;
+            border: 1px solid #555;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .part-item:hover { background: #444; }
+        .part-item.selected { background: #2e7d32; border-color: #4caf50; }
+
+        .part-req {
+            font-size: 12px;
+            color: #aaa;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+
+        .req-status {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .req-status.ok { color: #4CAF50; }
+
+        #previewCanvas {
+            background: #444;
+            border: 2px solid #777;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button {
+            background-color: #1976D2;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+            width: 100%;
+        }
+
+        button:hover { background-color: #1565C0; }
+        button:disabled { background-color: #555; color: #888; cursor: not-allowed; }
+
+        #hud {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+
+        .status-row { display: flex; align-items: center; gap: 10px; }
+        .status-label { width: 60px; font-size: 14px; text-align: right;}
+        
+        .status-bar-container {
+            width: 150px;
+            height: 15px;
+            background-color: #222;
+            border: 1px solid #555;
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .status-bar { height: 100%; width: 100%; transition: width 0.1s; }
+        #health-bar { background-color: #4CAF50; }
+        #reload-bar { background-color: #ffeb3b; width: 0%; }
+        
+        .component-status {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .vehicle-toggle {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        .vehicle-toggle button {
+            background-color: #333;
+            border: 1px solid #555;
+            padding: 8px;
+            flex: 1;
+        }
+        .vehicle-toggle button.active {
+            background-color: #1976D2;
+            border-color: #2196F3;
+        }
+        
+        .comp-icon {
+            width: 20px; height: 20px;
+            background: #555;
+            border-radius: 3px;
+            text-align: center;
+            line-height: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            border: 1px solid #222;
+        }
+        .comp-icon.active { background: #4CAF50; }
+        .comp-icon.destroyed { background: #f44336; text-decoration: line-through; }
+
+        #ammo-info { margin-top: 5px; font-size: 16px; font-weight: bold; }
+
+        .overlay-screen {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 100;
+            pointer-events: auto;
+        }
+        .overlay-screen h1 { font-size: 4em; margin-bottom: 20px; text-transform: uppercase;}
+        #game-over h1 { color: #f44336; }
+        #victory h1 { color: #4CAF50; }
+
+        #instructions {
+            position: absolute; top: 10px; right: 10px;
+            font-size: 14px; background: rgba(0,0,0,0.7);
+            padding: 10px; border-radius: 5px; text-align: right;
+            pointer-events: none; border: 1px solid #555;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer">
+        
+        <div id="builder-menu" class="panel">
+            <div class="builder-left">
+                <h2>Garage: Assembly</h2>
+                
+                <div class="vehicle-toggle">
+                    <button id="btn-type-tank" class="active" onclick="setVehicleType('tank')">Build Tank</button>
+                    <button id="btn-type-plane" onclick="setVehicleType('plane')">Build Plane</button>
+                </div>
+
+                <div class="part-req">
+                    Status: 
+                    <span id="req-turret" class="req-status">Turret</span> | 
+                    <span id="req-engine" class="req-status">Engine</span> | 
+                    <span id="req-fuel" class="req-status">Fuel</span> | 
+                    <span id="req-ammo" class="req-status">Ammo</span>
+                </div>
+
+                <h3>Select Component</h3>
+                <div class="part-list" id="component-list">
+                    <!-- Populated by JS -->
+                </div>
+                <div style="font-size: 12px; color: #bbb; padding: 5px;" id="comp-desc">Select a part to view details.</div>
+            </div>
+
+            <div class="builder-right">
+                <h3>Chassis Layout</h3>
+                <p style="font-size: 12px; color:#aaa; margin:0 0 10px 0;">Click and drag to build your custom tank shape.</p>
+                <!-- 400x200 preview canvas for large tanks -->
+                <canvas id="previewCanvas" width="400" height="200"></canvas>
+                
+                <button id="btn-start" onclick="startGame()" style="margin-top: 20px;" disabled>DEPLOY TANK</button>
+                <button onclick="clearChassis()" style="margin-top: 5px; background-color: #d32f2f;">CLEAR</button>
+            </div>
+        </div>
+
+        <div id="hud">
+            <div class="status-row">
+                <div class="status-label">Hull:</div>
+                <div class="status-bar-container">
+                    <div id="health-bar" class="status-bar"></div>
+                </div>
+            </div>
+            <div class="status-row" id="row-throttle" style="display:none;">
+                <div class="status-label">Thrust:</div>
+                <div class="status-bar-container">
+                    <div id="throttle-bar" class="status-bar" style="background-color: #00bcd4; width: 0%;"></div>
+                </div>
+            </div>
+            <div class="status-row">
+                <div class="status-label">Reload:</div>
+                <div class="status-bar-container">
+                    <div id="reload-bar" class="status-bar"></div>
+                </div>
+            </div>
+            <div class="component-status">
+                <div id="icon-engine" class="comp-icon" title="Engine">E</div>
+                <div id="icon-fuel" class="comp-icon" title="Fuel Tank">F</div>
+                <div id="icon-ammo" class="comp-icon" title="Ammo Rack">A</div>
+            </div>
+            <div id="ammo-info">
+                Ammo: <span id="ammo-type" style="color: #4CAF50;">AP</span>
+            </div>
+        </div>
+        
+        <div id="instructions">
+            <b>Controls</b><br>
+            A / D : Drive Forward/Reverse<br>
+            Mouse : Aim Turret (360&deg;)<br>
+            Left Click : Fire<br>
+            R : Ammo (AP - Direct)<br>
+            T : Ammo (HE - Splash)<br><br>
+            <b>Mechanics</b><br>
+            Aiming adjusts turret rotation.<br>
+            Protect your internal components!<br>
+            Destroying enemy engines/fuel<br>stops them and deals massive damage.
+        </div>
+
+        <div id="game-over" class="overlay-screen">
+            <h1 id="go-title">DESTROYED</h1>
+            <p id="go-desc">Your tank was reduced to scrap.</p>
+            <button onclick="resetToBuilder()" style="width: auto;">Back to Garage</button>
+        </div>
+        <div id="victory" class="overlay-screen">
+            <h1>VICTORY</h1>
+            <p>Area secured. All hostiles eliminated.</p>
+            <button onclick="resetToBuilder()" style="width: auto;">Back to Garage</button>
+        </div>
+
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const previewCanvas = document.getElementById('previewCanvas');
+        const pCtx = previewCanvas.getContext('2d');
+
+        // Game State
+        let gameState = 'BUILDER';
+        let lastTime = 0;
+        let camera = { x: 0, y: 0, zoom: 1 };
+        
+        // Input state
+        const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+        const mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false };
+
+        // Constants
+        const GRAVITY = 800; // pixels per second squared
+        const TILE_SIZE = 5; // Smaller tiles for finer destructible terrain
+        const WORLD_WIDTH = 5000;
+        const WORLD_HEIGHT = 1500;
+        
+        // Colors
+        const COLORS = {
+            sky: '#3a5a78', dirt: '#4a3018', dirtLight: '#654321', grass: '#2e4a15',
+            explosion: ['#ffeb3b', '#ff9800', '#f44336', '#222'], smoke: '#555', fire: '#e65100'
+        };
+
+        // Internal Components for Chassis
+        const COMPONENT_TYPES = {
+            NONE: { id: 0, name: "Eraser", type: 'none', color: '#111', desc: "Removes parts from the grid." },
+            ENGINE: { id: 1, name: "V8 Engine", type: 'engine', hp: 80, color: '#9e9e9e', desc: "Provides movement. Explodes if destroyed." },
+            AERO_ENGINE: { id: 5, name: "Jet Engine", type: 'engine', hp: 60, color: '#00bcd4', desc: "High thrust for aircraft. Explodes." },
+            FUEL: { id: 2, name: "Fuel Tank", type: 'fuel', hp: 50, color: '#f44336', desc: "Required for engine. Ignites if destroyed." },
+            AMMO: { id: 3, name: "Ammo Rack", type: 'ammo', hp: 40, color: '#ffeb3b', desc: "Store shells. Massive explosion if destroyed." },
+            ARMOR: { id: 4, name: "Armor Plate", type: 'armor', hp: 150, color: '#4CAF50', desc: "Absorbs damage protecting inner parts." },
+            WING: { id: 6, name: "Wing Plating", type: 'armor', hp: 50, color: '#90caf9', desc: "Lightweight aero armor." }
+        };
+
+        const TURRETS = [
+            { id: 0, name: "Standard 75mm", reload: 1.5, length: 45, width: 8, color: '#556b2f',
+              ap: { spd: 1000, dmg: 40, rad: 25 }, he: { spd: 700, dmg: 25, rad: 70 } },
+            { id: 1, name: "Heavy 120mm", reload: 3.0, length: 60, width: 12, color: '#3d3d3d',
+              ap: { spd: 1100, dmg: 90, rad: 35 }, he: { spd: 800, dmg: 60, rad: 120 } },
+            { id: 2, name: "Artillery 155mm", reload: 5.0, length: 50, width: 16, color: '#4a5d23',
+              ap: { spd: 600, dmg: 120, rad: 50 }, he: { spd: 550, dmg: 100, rad: 180 }, isArty: true },
+            { id: 3, name: "Twin Autocannon", reload: 0.3, length: 40, width: 5, color: '#5c6b52', isTwin: true,
+              ap: { spd: 1200, dmg: 12, rad: 15 }, he: { spd: 900, dmg: 8, rad: 30 } },
+            { id: 4, name: "Sniper Railgun", reload: 2.5, length: 80, width: 6, color: '#2c3e50',
+              ap: { spd: 2500, dmg: 80, rad: 20 }, he: { spd: 2000, dmg: 40, rad: 50 } },
+            { id: 5, name: "Derp Gun 183mm", reload: 7.0, length: 35, width: 22, color: '#3e2723',
+              ap: { spd: 500, dmg: 180, rad: 60 }, he: { spd: 400, dmg: 150, rad: 250 } },
+            { id: 6, name: "Plasma Caster", reload: 1.0, length: 45, width: 10, color: '#006064',
+              ap: { spd: 800, dmg: 35, rad: 25, glow: '#00e5ff' }, he: { spd: 700, dmg: 20, rad: 60, glow: '#00e5ff' } },
+            { id: 7, name: "Vulcan Minigun", reload: 0.08, length: 50, width: 14, color: '#212121', isGatling: true,
+              ap: { spd: 1300, dmg: 5, rad: 8 }, he: { spd: 1100, dmg: 3, rad: 20 } },
+            { id: 8, name: "Siege Mortar (Giant)", reload: 8.0, length: 140, width: 35, color: '#263238',
+              ap: { spd: 800, dmg: 400, rad: 80 }, he: { spd: 450, dmg: 600, rad: 350 }, isArty: true, isGiant: true },
+            { id: 9, name: "Flak 88mm (Anti-Air)", reload: 0.8, length: 55, width: 10, color: '#78909c',
+              ap: { spd: 1600, dmg: 30, rad: 30 }, he: { spd: 1600, dmg: 40, rad: 100 }, isFlak: true },
+            { id: 10, name: "Heavy Bomb", reload: 4.0, length: 25, width: 16, color: '#37474f',
+              ap: { spd: 0, dmg: 350, rad: 120 }, he: { spd: 0, dmg: 350, rad: 120 }, isAero: true, isBomb: true },
+            { id: 11, name: "Aero Turret (Fast)", reload: 0.15, length: 30, width: 6, color: '#607d8b',
+              ap: { spd: 1400, dmg: 8, rad: 10 }, he: { spd: 1200, dmg: 6, rad: 25 }, isAero: true, isAeroTurret: true },
+            { id: 12, name: "Cluster Bomb", reload: 6.0, length: 28, width: 20, color: '#455a64',
+              ap: { spd: 0, dmg: 100, rad: 60 }, he: { spd: 0, dmg: 100, rad: 60 }, isAero: true, isBomb: true, isCluster: true },
+            { id: 13, name: "Aerial Cannon", reload: 1.2, length: 60, width: 8, color: '#263238',
+              ap: { spd: 2200, dmg: 80, rad: 20 }, he: { spd: 1800, dmg: 60, rad: 60 }, isAero: true }
+        ];
+
+        // Layout constants for custom dynamic chassis builder
+        // The grid maps 1:1 to the 400x200 canvas
+        const CHASSIS_COLS = 20;
+        const CHASSIS_ROWS = 10;
+        const SLOT_SIZE = 20;
+
+        let terrain = []; 
+        let entities = []; 
+        let projectiles = [];
+        let particles = [];
+
+        // Builder State
+        let builderSelection = { category: 'turret', itemIdx: 0 }; 
+        let playerBlueprint = {
+            vehicleType: 'tank',
+            turretIdx: -1,
+            turretPos: null,
+            grid: Array(CHASSIS_ROWS).fill(null).map(() => Array(CHASSIS_COLS).fill(COMPONENT_TYPES.NONE))
+        };
+        let playerVehicle = null;
+        
+        let previewHoverX = 0, previewHoverY = 0, isPreviewHovering = false;
+
+        function setVehicleType(type) {
+            playerBlueprint.vehicleType = type;
+            document.getElementById('btn-type-tank').className = type === 'tank' ? 'active' : '';
+            document.getElementById('btn-type-plane').className = type === 'plane' ? 'active' : '';
+            clearChassis();
+            populateComponentList(builderSelection.category);
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if(gameState === 'BUILDER') drawPreview();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        window.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+            if (e.key.toLowerCase() === 'r' && playerVehicle && gameState === 'PLAYING') playerVehicle.setAmmoType('ap');
+            if (e.key.toLowerCase() === 't' && playerVehicle && gameState === 'PLAYING') playerVehicle.setAmmoType('he');
+        });
+        window.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+        });
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        window.addEventListener('mousedown', (e) => { if (e.button === 0) mouse.down = true; });
+        window.addEventListener('mouseup', (e) => { if (e.button === 0) mouse.down = false; });
+
+        // Builder Painting Logic
+        let previewMouseDown = false;
+        
+        previewCanvas.addEventListener('mouseenter', () => isPreviewHovering = true);
+        previewCanvas.addEventListener('mouseleave', () => { isPreviewHovering = false; drawPreview(); });
+        
+        function handlePreviewClick(e) {
+            if(gameState !== 'BUILDER') return;
+            const rect = previewCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (builderSelection.category === 'turret') {
+                let col = Math.floor(x / SLOT_SIZE);
+                let row = Math.floor(y / SLOT_SIZE);
+                if (col >= 0 && col < CHASSIS_COLS && row >= 0 && row < CHASSIS_ROWS) {
+                    playerBlueprint.turretIdx = builderSelection.itemIdx;
+                    playerBlueprint.turretPos = { r: row, c: col };
+                }
+            } else if (builderSelection.category === 'component') {
+                let col = Math.floor(x / SLOT_SIZE);
+                let row = Math.floor(y / SLOT_SIZE);
+                
+                if (col >= 0 && col < CHASSIS_COLS && row >= 0 && row < CHASSIS_ROWS) {
+                    let compData = Object.values(COMPONENT_TYPES).find(c => c.id === builderSelection.itemIdx);
+                    if(compData) playerBlueprint.grid[row][col] = compData;
+                }
+            }
+            updateBuilderStatus();
+            drawPreview();
+        }
+
+        previewCanvas.addEventListener('mousedown', (e) => {
+            previewMouseDown = true;
+            handlePreviewClick(e);
+        });
+        window.addEventListener('mouseup', () => { previewMouseDown = false; });
+        previewCanvas.addEventListener('mousemove', (e) => {
+            const rect = previewCanvas.getBoundingClientRect();
+            previewHoverX = e.clientX - rect.left;
+            previewHoverY = e.clientY - rect.top;
+            if(previewMouseDown) handlePreviewClick(e);
+            if(builderSelection.category === 'turret') drawPreview();
+        });
+
+        function lerp(a, b, t) { return a + (b - a) * t; }
+        function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+        function dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
+        // Normalizes angle to -PI to PI
+        function normalizeAngle(a) {
+            while (a > Math.PI) a -= 2 * Math.PI;
+            while (a < -Math.PI) a += 2 * Math.PI;
+            return a;
+        }
+
+        function generateTerrain() {
+            terrain = new Int16Array(Math.ceil(WORLD_WIDTH / TILE_SIZE));
+            let height = WORLD_HEIGHT - 300; 
+            
+            for (let i = 0; i < terrain.length; i++) {
+                let x = i * TILE_SIZE;
+                let y = height;
+                y += Math.sin(x * 0.002) * 150;
+                y += Math.sin(x * 0.005) * 50;
+                y += Math.sin(x * 0.015) * 20;
+                terrain[i] = clamp(y, WORLD_HEIGHT/2, WORLD_HEIGHT - 50);
+            }
+        }
+
+        function getTerrainHeight(x) {
+            let index = Math.floor(x / TILE_SIZE);
+            index = clamp(index, 0, terrain.length - 1);
+            return terrain[index];
+        }
+
+        function destroyTerrain(cx, cy, radius) {
+            let startIdx = Math.floor((cx - radius) / TILE_SIZE);
+            let endIdx = Math.ceil((cx + radius) / TILE_SIZE);
+            
+            startIdx = Math.max(0, startIdx);
+            endIdx = Math.min(terrain.length - 1, endIdx);
+
+            let destroyed = false;
+            for (let i = startIdx; i <= endIdx; i++) {
+                let tx = i * TILE_SIZE;
+                let dx = tx - cx;
+                
+                if (Math.abs(dx) <= radius) {
+                    let dy = Math.sqrt(radius * radius - dx * dx);
+                    let explosionBottomY = cy + dy;
+                    let explosionTopY = cy - dy;
+
+                    // If explosion hits surface
+                    if (explosionBottomY > terrain[i] && explosionTopY < terrain[i]) {
+                        terrain[i] = explosionBottomY;
+                        destroyed = true;
+                    } else if (explosionTopY < terrain[i] && explosionBottomY > WORLD_HEIGHT) {
+                         terrain[i] = explosionBottomY; // Deep crater
+                         destroyed = true;
+                    }
+                }
+            }
+            if (destroyed) {
+                for(let i=0; i<15; i++) {
+                    createParticle(cx + (Math.random()-0.5)*radius, cy + (Math.random()-0.5)*radius, COLORS.dirt, Math.random()*3+1, 500);
+                }
+            }
+        }
+
+        class Particle {
+            constructor(x, y, vx, vy, color, size, life, isFire = false) {
+                this.x = x; this.y = y;
+                this.vx = vx; this.vy = vy;
+                this.color = color;
+                this.size = size;
+                this.maxLife = life;
+                this.life = life;
+                this.isFire = isFire;
+            }
+            update(dt) {
+                if(!this.isFire) this.vy += GRAVITY * 0.5 * dt; 
+                else { this.vy -= 150 * dt; this.size *= 0.98; } // Fire floats up and shrinks
+
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+                this.life -= dt * 1000;
+                
+                if (!this.isFire) {
+                    let th = getTerrainHeight(this.x);
+                    if (this.y > th) {
+                        this.y = th;
+                        this.vy *= -0.3;
+                        this.vx *= 0.5;
+                    }
+                }
+            }
+            draw(ctx) {
+                let alpha = Math.max(0, this.life / this.maxLife);
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function createParticle(x, y, color, size, life, speedMultiplier = 1, isFire=false) {
+            let angle = Math.random() * Math.PI * 2;
+            let speed = Math.random() * 200 * speedMultiplier;
+            let vy = Math.sin(angle)*speed;
+            if(isFire) vy = -Math.abs(vy); // fire goes up
+            particles.push(new Particle(x, y, Math.cos(angle)*speed, vy, color, size, life, isFire));
+        }
+
+        function createExplosion(x, y, radius, isMassive = false) {
+            let radMult = isMassive ? 2 : 1;
+            particles.push(new Particle(x, y, 0, 0, '#fff', radius*radMult, 150));
+            
+            let pCount = radius;
+            if(isMassive) pCount *= 2;
+
+            for (let i = 0; i < pCount; i++) {
+                let color = COLORS.explosion[Math.floor(Math.random() * COLORS.explosion.length)];
+                createParticle(x, y, color, Math.random() * (radius/4)*radMult + 5, 500 + Math.random() * 800, (radius/40)*radMult);
+            }
+            for(let i=0; i<10*radMult; i++) {
+                createParticle(x, y, '#222', Math.random()*5+2, 1000, (radius/20)*radMult);
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, angle, speed, dmg, radius, color, owner, type) {
+                this.x = x;
+                this.y = y;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                
+                // Inherit velocity se for bomba disparada de aeronave
+                if (owner.turretData && owner.turretData.isBomb) {
+                     this.vx += owner.vx;
+                     this.vy += owner.vy;
+                }
+
+                this.dmg = dmg;
+                this.radius = radius;
+                this.color = color;
+                this.owner = owner; 
+                this.type = type; // 'ap' or 'he'
+                this.active = true;
+                this.trail = [];
+                this.lifeTime = 0;
+                
+                // AP flies straighter, HE arcs more
+                this.gravity = type === 'he' ? GRAVITY : GRAVITY * 0.4; 
+                if (owner.turretData && owner.turretData.isArty) this.gravity = GRAVITY * 1.5;
+                if (owner.turretData && owner.turretData.isBomb) this.gravity = GRAVITY * 1.2;
+            }
+
+            update(dt) {
+                if (!this.active) return;
+                
+                this.lifeTime += dt;
+                this.vy += this.gravity * dt;
+                let nextX = this.x + this.vx * dt;
+                let nextY = this.y + this.vy * dt;
+
+                // Cluster Bomb Splitting
+                if (this.owner.turretData && this.owner.turretData.isCluster && this.lifeTime > 0.6 && this.vy > 0) {
+                     this.active = false;
+                     for(let i=0; i<5; i++) {
+                         let spreadX = (Math.random() - 0.5) * 400;
+                         let spreadY = (Math.random() - 0.5) * 200;
+                         let p = new Projectile(this.x, this.y, 0, 0, this.dmg, this.radius, '#ff9800', this.owner, 'he');
+                         p.vx = this.vx + spreadX;
+                         p.vy = this.vy + spreadY;
+                         // Remove isCluster para nao repetir e isBomb pra seguir as regras de física HE padrao
+                         p.owner = { ...this.owner, turretData: { ...this.owner.turretData, isCluster: false, isBomb: false } }; 
+                         projectiles.push(p);
+                     }
+                     return;
+                }
+
+                // Flak Proximity Fuse (Anti-Air)
+                if (this.owner.turretData && this.owner.turretData.isFlak && this.type === 'he') {
+                    for (let entity of entities) {
+                        if (entity !== this.owner && entity.active && entity.isPlane) {
+                            let d = dist(nextX, nextY, entity.x, entity.y);
+                            if (d < 150) {
+                                this.explode(nextX, nextY, entity);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                this.trail.push({x: this.x, y: this.y});
+                if (this.trail.length > 15) this.trail.shift();
+
+                // Terrain hit
+                let th = getTerrainHeight(nextX);
+                if (nextY >= th || nextX < 0 || nextX > WORLD_WIDTH) {
+                    this.explode(nextX, nextY);
+                    return;
+                }
+
+                // Entity Hit (Rectangle collision approximation)
+                for (let entity of entities) {
+                    if (entity !== this.owner && entity.active) {
+                        // Transform projectile point to tank local space to check against OBB
+                        // Simplified: Treat tank as a circle for initial check, then detail check
+                        let distToTank = dist(nextX, nextY, entity.x, entity.y - entity.h/2);
+                        if (distToTank < Math.max(entity.w, entity.h)) {
+                            // Rough hit, let's just use radius check for speed
+                            if(distToTank < entity.w/1.5) {
+                                this.explode(nextX, nextY, entity);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                this.x = nextX;
+                this.y = nextY;
+            }
+
+            explode(x, y, directHitEntity = null) {
+                this.active = false;
+                createExplosion(x, y, this.radius);
+                destroyTerrain(x, y, this.radius);
+
+                for (let entity of entities) {
+                    if (!entity.active) continue;
+                    
+                    let cy = entity.y - entity.h/2;
+                    let d = dist(x, y, entity.x, cy);
+                    
+                    // Splash damage radius check
+                    if (d < this.radius + entity.w/2) {
+                        let damageFactor = 1 - (Math.max(0, d - entity.w/2) / this.radius);
+                        let actualDmg = this.dmg * damageFactor;
+                        
+                        if (directHitEntity === entity) {
+                            actualDmg = this.dmg; // Full damage on direct hit
+                            
+                            // AP rounds can penetrate armor to hit internals
+                            let penChance = this.type === 'ap' ? 0.7 : 0.2;
+                            entity.takeDamage(actualDmg, penChance);
+                        } else {
+                            // Splash hits outer armor mostly
+                            entity.takeDamage(actualDmg, 0.1); 
+                        }
+
+                        // Impulse
+                        let angle = Math.atan2(cy - y, entity.x - x);
+                        let force = (this.type === 'he' ? 400 : 150) * damageFactor;
+                        entity.applyImpulse(Math.cos(angle)*force, Math.sin(angle)*force - force);
+                    }
+                }
+            }
+
+            draw(ctx) {
+                if (!this.active) return;
+                
+                ctx.beginPath();
+                for (let i = 0; i < this.trail.length; i++) {
+                    ctx.lineTo(this.trail[i].x, this.trail[i].y);
+                }
+                ctx.lineTo(this.x, this.y);
+                ctx.strokeStyle = this.type === 'he' ? 'rgba(255, 150, 0, 0.6)' : 'rgba(200, 200, 200, 0.6)';
+                ctx.lineWidth = this.type === 'he' ? 3 : 2;
+                ctx.stroke();
+
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(Math.atan2(this.vy, this.vx));
+                ctx.fillStyle = this.color || '#ff0';
+                
+                if (this.type === 'he') {
+                    ctx.fillRect(-8, -4, 16, 8);
+                } else { 
+                    ctx.beginPath();
+                    ctx.moveTo(8, 0); ctx.lineTo(-6, 3); ctx.lineTo(-6, -3);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        class InternalComponent {
+            constructor(data, row, col) {
+                this.type = data.type;
+                this.name = data.name;
+                this.maxHp = data.hp;
+                this.hp = this.maxHp;
+                this.color = data.color;
+                this.row = row;
+                this.col = col;
+                this.active = true;
+            }
+            
+            takeDamage(amount) {
+                if(!this.active || this.type === 'none') return false;
+                this.hp -= amount;
+                if(this.hp <= 0) {
+                    this.hp = 0;
+                    this.active = false;
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        class Tank {
+            constructor(x, blueprint, isPlayer) {
+                this.x = x;
+                this.y = 0; 
+                this.vx = 0;
+                this.vy = 0;
+                
+                this.turretData = TURRETS[blueprint.turretIdx] || TURRETS[0];
+                
+                // Calculate Dynamic Bounding Box
+                let minR = CHASSIS_ROWS, maxR = -1, minC = CHASSIS_COLS, maxC = -1;
+                for(let r=0; r<CHASSIS_ROWS; r++) {
+                    for(let c=0; c<CHASSIS_COLS; c++) {
+                        if(blueprint.grid[r][c].type !== 'none') {
+                            if(r < minR) minR = r;
+                            if(r > maxR) maxR = r;
+                            if(c < minC) minC = c;
+                            if(c > maxC) maxC = c;
+                        }
+                    }
+                }
+                
+                // Fallback for empty tank
+                if (maxR === -1) { minR=0; maxR=1; minC=0; maxC=2; }
+
+                this.gridW = (maxC - minC + 1);
+                this.gridH = (maxR - minR + 1);
+                this.w = this.gridW * SLOT_SIZE;
+                this.h = this.gridH * SLOT_SIZE;
+
+                this.components = [];
+                for(let r=minR; r<=maxR; r++) {
+                    for(let c=minC; c<=maxC; c++) {
+                        let cd = blueprint.grid[r][c];
+                        if(cd.type !== 'none') {
+                            this.components.push(new InternalComponent(cd, r - minR, c - minC));
+                        }
+                    }
+                }
+
+                // Calculate exact local turret coordinates
+                let thOffset = 16;
+                let tCol = blueprint.turretPos ? blueprint.turretPos.c : Math.floor((minC + maxC)/2);
+                let tRow = blueprint.turretPos ? blueprint.turretPos.r : minR - 1;
+                
+                let turretLocalC = tCol - minC;
+                let turretLocalR = tRow - minR;
+                
+                this.localTurretX = -this.w/2 + (turretLocalC + 0.5) * SLOT_SIZE;
+                this.localTurretY = -thOffset - this.h + (turretLocalR + 0.5) * SLOT_SIZE;
+
+                // Base stats based on size
+                this.maxHp = this.components.length * 20; 
+                this.components.forEach(c => { 
+                    if(c.type === 'armor') this.maxHp += c.maxHp; 
+                    if(c.type === 'engine') this.maxHp += c.maxHp;
+                });
+                this.hp = this.maxHp;
+                
+                this.isPlayer = isPlayer;
+                this.active = true;
+                
+                this.pitch = 0; 
+                this.turretAngle = 0; 
+                this.targetTurretAngle = 0;
+                
+                this.ammoSelection = 'ap'; 
+                this.reloadTimer = 0;
+                this.fireTicks = 0; 
+                
+                this.trackPos = 0; 
+                this.recoil = 0; 
+                this.isTwinAlt = false;
+
+                this.canMove = true;
+                this.isBurning = false;
+
+                this.aiState = 'IDLE'; 
+                this.aiTimer = 0;
+                this.moveDir = 0;
+                
+                this.y = getTerrainHeight(this.x) - 10;
+            }
+
+            get compStatus() {
+                let hasEngine = false, engineActive = false;
+                let hasFuel = false, fuelActive = false;
+                let hasAmmo = false, ammoActive = false;
+
+                this.components.forEach(c => {
+                    if(c.type === 'engine') { hasEngine = true; engineActive = c.active; }
+                    if(c.type === 'fuel') { hasFuel = true; fuelActive = c.active; }
+                    if(c.type === 'ammo') { hasAmmo = true; ammoActive = c.active; }
+                });
+
+                return {
+                    engine: { present: hasEngine, active: engineActive },
+                    fuel: { present: hasFuel, active: fuelActive },
+                    ammo: { present: hasAmmo, active: ammoActive }
+                };
+            }
+
+            setAmmoType(type) {
+                this.ammoSelection = type;
+                if(this.isPlayer) updateHUDAmmo();
+            }
+
+            takeDamage(amount, penChance) {
+                if (!this.active) return;
+                
+                this.hp -= amount;
+                
+                if (Math.random() < penChance && this.components.length > 0) {
+                    let activeComps = this.components.filter(c => c.active && c.type !== 'armor');
+                    if (activeComps.length > 0) {
+                        let targetComp = activeComps[Math.floor(Math.random() * activeComps.length)];
+                        let destroyed = targetComp.takeDamage(amount * 0.5); 
+                        
+                        if (destroyed) {
+                            this.handleComponentDestruction(targetComp);
+                        }
+                    }
+                }
+
+                if (this.hp <= 0) this.die();
+                if (this.isPlayer) updateHUDHealth();
+            }
+            
+            handleComponentDestruction(comp) {
+                let cy = this.y - this.h/2;
+                
+                if (comp.type === 'engine') {
+                    createExplosion(this.x, cy, 60);
+                    this.hp -= 100;
+                    this.canMove = false;
+                    createParticle(this.x, cy - 20, '#f00', 0, 1000); 
+                } else if (comp.type === 'fuel') {
+                    this.isBurning = true;
+                    this.fireTicks = 15; 
+                    this.canMove = false; 
+                    createExplosion(this.x, cy, 50);
+                } else if (comp.type === 'ammo') {
+                    createExplosion(this.x, cy, 120, true);
+                    this.hp -= 500; 
+                    destroyTerrain(this.x, cy, 80);
+                }
+                
+                if(this.hp <= 0) this.die();
+                if(this.isPlayer) updateHUDHealth();
+            }
+
+            applyImpulse(vx, vy) {
+                this.vx += vx;
+                this.vy += vy;
+            }
+
+            die() {
+                if(!this.active) return;
+                this.active = false;
+                this.hp = 0;
+                
+                let cy = this.y - this.h/2;
+                createExplosion(this.x, cy, this.w);
+                createParticle(this.x, cy - 20, this.turretData.color, this.w/3, 5000, 3); 
+                
+                if (this.isPlayer) {
+                    setTimeout(() => setGameState('GAMEOVER'), 2000);
+                } else {
+                    checkVictory();
+                }
+            }
+
+            shoot() {
+                if (!this.active || this.reloadTimer > 0) return;
+
+                let ammo = this.ammoSelection === 'he' ? this.turretData.he : this.turretData.ap;
+                let l = this.turretData.length;
+                
+                // Mount point calculated with tank's pitch rotation
+                let cosP = Math.cos(this.pitch);
+                let sinP = Math.sin(this.pitch);
+                let mountX = this.x + this.localTurretX * cosP - this.localTurretY * sinP;
+                let mountY = this.y + this.localTurretX * sinP + this.localTurretY * cosP;
+
+                let bx = mountX + Math.cos(this.turretAngle) * l;
+                let by = mountY + Math.sin(this.turretAngle) * l;
+
+                if (this.turretData.isTwin) {
+                    let offset = this.isTwinAlt ? 5 : -5;
+                    bx += Math.cos(this.turretAngle + Math.PI/2) * offset;
+                    by += Math.sin(this.turretAngle + Math.PI/2) * offset;
+                    this.isTwinAlt = !this.isTwinAlt;
+                }
+
+                let proj = new Projectile(bx, by, this.turretAngle, ammo.spd, ammo.dmg, ammo.rad, ammo.glow || (this.ammoSelection==='he'?'#ff9800':'#ccc'), this, this.ammoSelection);
+                projectiles.push(proj);
+
+                this.reloadTimer = this.turretData.reload;
+                this.recoil = this.turretData.isGiant ? 30 : 15;
+                
+                // Recoil impulse
+                this.vx -= Math.cos(this.turretAngle) * ammo.spd * (this.turretData.isGiant ? 0.3 : 0.05);
+                
+                createParticle(bx, by, '#ffeb3b', this.turretData.isGiant ? 20 : 10, 150);
+            }
+
+            update(dt) {
+                if (!this.active) {
+                    this.vy += GRAVITY * dt;
+                    this.y += this.vy * dt;
+                    let th = getTerrainHeight(this.x);
+                    if (this.y > th) { this.y = th; this.vy = 0; this.vx *= 0.5; this.pitch = 0; }
+                    return;
+                }
+
+                if (this.isBurning) {
+                    this.fireTicks -= dt;
+                    if (Math.random() < 0.3) createParticle(this.x + (Math.random()-0.5)*this.w, this.y - this.h/2, COLORS.fire, Math.random()*12+4, 800, 0.5, true);
+                    this.takeDamage(15 * dt, 0); 
+                    if (this.fireTicks <= 0) this.isBurning = false;
+                }
+                
+                let s = this.compStatus;
+                this.canMove = (s.engine.active && s.fuel.active);
+
+                if (!this.isPlayer) this.updateAI(dt);
+
+                let inputX = 0;
+                if (this.isPlayer && this.canMove) {
+                    if (keys.a || keys.ArrowLeft) inputX = -1;
+                    if (keys.d || keys.ArrowRight) inputX = 1;
+                } else if (!this.isPlayer && this.canMove) {
+                    inputX = this.moveDir;
+                }
+                
+                // Aiming - Mouse calculates globally based on proper mount position
+                if (this.isPlayer) {
+                    let cosP = Math.cos(this.pitch);
+                    let sinP = Math.sin(this.pitch);
+                    let mountX = this.x + this.localTurretX * cosP - this.localTurretY * sinP;
+                    let mountY = this.y + this.localTurretX * sinP + this.localTurretY * cosP;
+                    this.targetTurretAngle = Math.atan2(mouse.worldY - mountY, mouse.worldX - mountX);
+                    if (mouse.down && s.ammo.active) this.shoot();
+                }
+
+                this.vy += GRAVITY * dt;
+                
+                let hw = this.w / 2;
+                let nx = this.x + this.vx * dt;
+                let ny = this.y + this.vy * dt;
+
+                // Ground sampling across tank width
+                let groundY = WORLD_HEIGHT;
+                let samples = 5;
+                let highestPointLeft = WORLD_HEIGHT, highestPointRight = WORLD_HEIGHT;
+                
+                for(let i=0; i<=samples; i++) {
+                     let px = nx - hw + 5 + ((this.w - 10) * i / samples);
+                     let h = getTerrainHeight(px);
+                     groundY = Math.min(groundY, h);
+                     if(i < samples/2) highestPointLeft = Math.min(highestPointLeft, h);
+                     else highestPointRight = Math.min(highestPointRight, h);
+                }
+                
+                let slope = Math.atan2(highestPointRight - highestPointLeft, this.w * 0.8);
+                let onGround = (ny >= groundY - 2);
+
+                if (onGround) {
+                    this.y = groundY;
+                    this.vy = 0;
+                    
+                    this.pitch = lerp(this.pitch, slope, dt * 8);
+                    
+                    if (inputX !== 0) {
+                        let accel = 350;
+                        let maxSpd = 120; // Slower for larger tanks
+                        this.vx += inputX * accel * dt;
+                        
+                        let slopeGravity = Math.sin(this.pitch) * GRAVITY * 0.5 * dt;
+                        this.vx -= slopeGravity;
+
+                        this.trackPos += inputX * maxSpd * dt * 0.2;
+                    }
+
+                    this.vx *= 0.82; // Friction
+                    this.vx = clamp(this.vx, -200, 200);
+                    
+                    if (Math.abs(this.pitch) > 1.0) this.vx *= 0.5;
+
+                } else {
+                    this.pitch = lerp(this.pitch, 0, dt * 2);
+                    this.vx *= 0.99;
+                }
+
+                this.x += this.vx * dt;
+                
+                if (this.x < hw) { this.x = hw; this.vx = 0; }
+                if (this.x > WORLD_WIDTH - hw) { this.x = WORLD_WIDTH - hw; this.vx = 0; }
+
+                // Smooth Turret Rotation
+                let diff = normalizeAngle(this.targetTurretAngle - this.turretAngle);
+                let rotStep = Math.PI * dt * (this.turretData.isGiant ? 0.5 : 1.5); 
+                
+                if (Math.abs(diff) < rotStep) {
+                    this.turretAngle = this.targetTurretAngle;
+                } else {
+                    this.turretAngle += Math.sign(diff) * rotStep;
+                }
+                this.turretAngle = normalizeAngle(this.turretAngle);
+
+                if (this.reloadTimer > 0) this.reloadTimer = Math.max(0, this.reloadTimer - dt);
+                if (this.recoil > 0) this.recoil = lerp(this.recoil, 0, dt * 10);
+            }
+
+            updateAI(dt) {
+                if(!playerVehicle || !playerVehicle.active) return;
+                
+                this.aiTimer -= dt;
+                let s = this.compStatus;
+                
+                let dx = playerVehicle.x - this.x;
+                let dy = playerVehicle.y - this.y;
+                let distToPlayer = Math.hypot(dx, dy);
+                let dirToPlayer = Math.sign(dx);
+
+                if (this.aiTimer <= 0) {
+                    this.aiTimer = 0.5 + Math.random() * 1.5;
+                    if (distToPlayer > 800) {
+                        this.aiState = 'MOVE';
+                        this.moveDir = dirToPlayer;
+                    } else if (distToPlayer < 300) {
+                        this.aiState = 'MOVE';
+                        this.moveDir = -dirToPlayer; 
+                    } else {
+                        this.aiState = Math.random() > 0.4 ? 'ATTACK' : 'IDLE';
+                        this.moveDir = Math.random() > 0.5 ? dirToPlayer : 0;
+                    }
+                    if(Math.random() > 0.9) this.ammoSelection = this.ammoSelection === 'ap' ? 'he' : 'ap';
+                }
+
+                let cosP = Math.cos(this.pitch);
+                let sinP = Math.sin(this.pitch);
+                let mountX = this.x + this.localTurretX * cosP - this.localTurretY * sinP;
+                let mountY = this.y + this.localTurretX * sinP + this.localTurretY * cosP;
+                
+                let targetX = playerVehicle.x;
+                let targetY = playerVehicle.y - playerVehicle.h/2;
+                
+                if (this.ammoSelection === 'he' || this.turretData.isArty) { 
+                     let vel = this.ammoSelection === 'he' ? this.turretData.he.spd : this.turretData.ap.spd;
+                     let timeToTarget = distToPlayer / vel;
+                     let g = this.turretData.isArty ? GRAVITY * 1.5 : GRAVITY;
+                     targetY -= 0.5 * g * timeToTarget * timeToTarget;
+                }
+                
+                let aimError = (Math.random() - 0.5) * (distToPlayer / 1000);
+                this.targetTurretAngle = Math.atan2(targetY - mountY, targetX - mountX) + aimError;
+
+                let diff = Math.abs(normalizeAngle(this.targetTurretAngle - this.turretAngle));
+                if (diff < 0.15 && distToPlayer < 1500 && this.aiState !== 'IDLE' && s.ammo.active) {
+                    this.shoot();
+                }
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                if (!this.active) {
+                    ctx.rotate(this.pitch);
+                    ctx.fillStyle = '#1a1a1a';
+                    let th = 16;
+                    ctx.fillRect(-this.w/2, -th - this.h, this.w, this.h);
+                    ctx.restore();
+                    return;
+                }
+
+                ctx.rotate(this.pitch);
+                
+                let th = 16; // Track Height
+
+                // --- Draw Fixed Tracks & Wheels ---
+                // Belt
+                ctx.fillStyle = '#111';
+                ctx.beginPath();
+                ctx.roundRect(-this.w/2 - 5, -th, this.w + 10, th, 5);
+                ctx.fill();
+
+                // Fixed Road Wheels
+                let wheelRad = th/2 - 2;
+                let wheelCount = Math.max(3, Math.floor((this.w + 10) / (wheelRad*2 + 6)));
+                let spacing = (this.w - wheelRad*2) / (wheelCount - 1);
+                
+                ctx.fillStyle = '#555';
+                for(let i=0; i<wheelCount; i++) {
+                    let wx = -this.w/2 + wheelRad + (i * spacing);
+                    let wy = -th/2;
+                    ctx.save();
+                    ctx.translate(wx, wy);
+                    ctx.rotate(this.trackPos * 0.05); // Spin the wheel visually based on movement
+                    ctx.beginPath(); ctx.arc(0, 0, wheelRad, 0, Math.PI*2); ctx.fill();
+                    
+                    // Wheel Spokes for visual rotation
+                    ctx.fillStyle = '#222';
+                    ctx.fillRect(-wheelRad, -1, wheelRad*2, 2);
+                    ctx.fillRect(-1, -wheelRad, 2, wheelRad*2);
+                    ctx.restore();
+                }
+
+                // --- Draw Custom Block Chassis ---
+                ctx.save();
+                ctx.translate(-this.w/2, -th - this.h);
+                
+                this.components.forEach(c => {
+                    ctx.fillStyle = c.active ? c.color : '#000';
+                    ctx.fillRect(c.col * SLOT_SIZE, c.row * SLOT_SIZE, SLOT_SIZE, SLOT_SIZE);
+                    ctx.strokeStyle = '#222';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(c.col * SLOT_SIZE, c.row * SLOT_SIZE, SLOT_SIZE, SLOT_SIZE);
+                });
+                
+                // Draw Chassis outline wrapper
+                ctx.strokeStyle = this.isPlayer ? 'rgba(74, 107, 74, 0.8)' : 'rgba(107, 74, 74, 0.8)'; 
+                ctx.lineWidth = 3; 
+                ctx.strokeRect(0, 0, this.w, this.h);
+                ctx.restore(); // Back to tank (tracks) origin space
+
+                // --- Draw Turret ---
+                ctx.save();
+                ctx.translate(this.localTurretX, this.localTurretY);
+                // Turret aims in global angles, so we subtract the tank's current pitch 
+                // to maintain the global angle inside the pitched coordinate system
+                ctx.rotate(this.turretAngle - this.pitch);
+                
+                ctx.fillStyle = '#222';
+                let bl = this.turretData.length;
+                let bw = this.turretData.width;
+                let rx = -this.recoil; 
+                
+                if (this.turretData.isTwin) {
+                    ctx.fillRect(rx, -bw, bl, bw*0.8);
+                    ctx.fillRect(rx, bw*0.2, bl, bw*0.8);
+                } else if (this.turretData.isGatling) {
+                    ctx.fillRect(rx, -bw/2, bl, bw);
+                    ctx.fillStyle = '#444';
+                    ctx.fillRect(rx, -bw/4, bl, 2);
+                    ctx.fillRect(rx, bw/4, bl, 2);
+                } else {
+                    ctx.fillRect(rx, -bw/2, bl, bw);
+                    if (this.turretData.id === 5 || this.turretData.id === 8) { // Derp & Siege muzzle brake
+                        ctx.fillRect(rx + bl - 5, -bw, 15, bw*2);
+                    }
+                }
+                
+                // Draw Turret Base/Cube
+                ctx.fillStyle = this.turretData.color;
+                if (this.turretData.isGiant) {
+                    ctx.fillRect(-bw, -bw, bw*2, bw*2);
+                    ctx.lineWidth = 2; ctx.strokeStyle = '#111';
+                    ctx.strokeRect(-bw, -bw, bw*2, bw*2);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, bw*1.2 + 8, 0, Math.PI*2);
+                    ctx.fill(); ctx.stroke();
+                }
+
+                ctx.restore(); // Restore local turret space
+                ctx.restore(); // Restore global tank space
+                
+                // Draw Enemy Health Bar
+                if (this.hp < this.maxHp && !this.isPlayer) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.fillRect(this.x - 25, this.y - this.h - 40, 50, 6);
+                    ctx.fillStyle = '#f44336';
+                    ctx.fillRect(this.x - 25, this.y - this.h - 40, 50 * (this.hp/this.maxHp), 6);
+                }
+            }
+        }
+
+        class Airplane extends Tank {
+            constructor(x, blueprint, isPlayer) {
+                super(x, blueprint, isPlayer);
+                this.isPlane = true;
+                this.y = WORLD_HEIGHT - 600; // Inicia nas alturas
+                this.vx = isPlayer ? 400 : -400;
+                this.throttle = 80;
+                this.pitch = isPlayer ? 0 : Math.PI;
+                this.turretAngle = this.pitch;
+            }
+
+            update(dt) {
+                if (!this.active) {
+                    this.vy += GRAVITY * dt;
+                    this.pitch += dt; // Caos e rodopio
+                    this.x += this.vx * dt;
+                    this.y += this.vy * dt;
+                    let th = getTerrainHeight(this.x);
+                    if (this.y > th) { this.die(); }
+                    return;
+                }
+
+                if (this.isBurning) {
+                    this.fireTicks -= dt;
+                    if (Math.random() < 0.5) createParticle(this.x, this.y, COLORS.fire, Math.random()*12+4, 800, 0.5, true);
+                    this.takeDamage(20 * dt, 0); 
+                    if (this.fireTicks <= 0) this.isBurning = false;
+                }
+
+                let s = this.compStatus;
+                this.canMove = (s.engine.active && s.fuel.active);
+
+                if (this.isPlayer && this.canMove) {
+                    // Controles de acelerador do jato
+                    if (keys.w || keys.ArrowUp) this.throttle = clamp(this.throttle + dt * 100, 0, 100);
+                    if (keys.s || keys.ArrowDown) this.throttle = clamp(this.throttle - dt * 100, 0, 100);
+                    
+                    // Jato segue o mouse diretamente
+                    let targetPitch = Math.atan2(mouse.worldY - this.y, mouse.worldX - this.x);
+                    let diff = normalizeAngle(targetPitch - this.pitch);
+                    this.pitch += clamp(diff, -dt * 3.0, dt * 3.0); // Velocidade de manobra
+
+                    // Mirar de acordo com o tipo de arma montada
+                    if (this.turretData.isAeroTurret) {
+                         this.targetTurretAngle = targetPitch; // Mirar solto (Aero Turret)
+                    } else if (this.turretData.isBomb) {
+                         this.targetTurretAngle = Math.PI/2; // Fixar pro chao (Bombas)
+                    } else {
+                         this.targetTurretAngle = this.pitch; // Fixar frente do jato (Canhões)
+                    }
+                    
+                    if (mouse.down && s.ammo.active) this.shoot();
+                } else if (!this.isPlayer) {
+                    this.updateAIAero(dt);
+                }
+
+                if (!this.canMove) this.throttle = lerp(this.throttle, 0, dt);
+
+                let targetSpeed = (this.throttle / 100) * 800; // Velocidade Max
+                let targetVX = Math.cos(this.pitch) * targetSpeed;
+                let targetVY = Math.sin(this.pitch) * targetSpeed;
+                
+                // Estol se estiver sem velocidade
+                let stallFactor = 1.0 - (this.throttle / 100);
+                targetVY += GRAVITY * 0.9 * stallFactor;
+
+                this.vx = lerp(this.vx, targetVX, dt * 2.5);
+                this.vy = lerp(this.vy, targetVY, dt * 2.5);
+                
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+
+                let hw = this.w / 2;
+                if (this.x < hw) { this.x = hw; this.vx = 0; }
+                if (this.x > WORLD_WIDTH - hw) { this.x = WORLD_WIDTH - hw; this.vx = 0; }
+
+                let th = getTerrainHeight(this.x);
+                if (this.y + this.h/2 >= th) {
+                    this.die(); // Colisao c solo
+                }
+
+                // Gira torre do avião visualmente
+                let diffT = normalizeAngle(this.targetTurretAngle - this.turretAngle);
+                let rotStep = Math.PI * dt * 4.0; 
+                if (Math.abs(diffT) < rotStep) this.turretAngle = this.targetTurretAngle;
+                else this.turretAngle += Math.sign(diffT) * rotStep;
+                
+                if (this.reloadTimer > 0) this.reloadTimer = Math.max(0, this.reloadTimer - dt);
+            }
+
+            updateAIAero(dt) {
+                if(!playerVehicle || !playerVehicle.active) return;
+                let dx = playerVehicle.x - this.x;
+                let dy = playerVehicle.y - this.y;
+                let targetPitch = Math.atan2(dy, dx);
+                
+                if (this.turretData.isBomb) {
+                     // Fica alto para jogar a bomba
+                     targetPitch = Math.atan2(WORLD_HEIGHT - 600 - this.y, dx); 
+                     if (Math.abs(dx) < 300 && dy > 0 && this.compStatus.ammo.active) this.shoot();
+                     this.targetTurretAngle = Math.PI/2;
+                } else {
+                     if (Math.hypot(dx, dy) < 1000 && this.compStatus.ammo.active) this.shoot();
+                     this.targetTurretAngle = targetPitch;
+                }
+
+                let diff = normalizeAngle(targetPitch - this.pitch);
+                this.pitch += clamp(diff, -dt * 1.5, dt * 1.5);
+                this.throttle = 80;
+            }
+            
+            shoot() {
+                if (!this.active || this.reloadTimer > 0) return;
+                let ammo = this.ammoSelection === 'he' ? this.turretData.he : this.turretData.ap;
+                let l = this.turretData.length;
+                let cosP = Math.cos(this.pitch);
+                let sinP = Math.sin(this.pitch);
+                let tyLocal = this.localTurretY + this.h/2; 
+                let mountX = this.x + this.localTurretX * cosP - tyLocal * sinP;
+                let mountY = this.y + this.localTurretX * sinP + tyLocal * cosP;
+                let bx = mountX + Math.cos(this.turretAngle) * l;
+                let by = mountY + Math.sin(this.turretAngle) * l;
+                let proj = new Projectile(bx, by, this.turretAngle, ammo.spd, ammo.dmg, ammo.rad, ammo.glow || (this.ammoSelection==='he'?'#ff9800':'#ccc'), this, this.ammoSelection);
+                projectiles.push(proj);
+                this.reloadTimer = this.turretData.reload;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.pitch);
+
+                ctx.save();
+                ctx.translate(-this.w/2, -this.h/2);
+                this.components.forEach(c => {
+                    ctx.fillStyle = c.active ? c.color : '#000';
+                    ctx.fillRect(c.col * SLOT_SIZE, c.row * SLOT_SIZE, SLOT_SIZE, SLOT_SIZE);
+                    ctx.strokeStyle = '#222';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(c.col * SLOT_SIZE, c.row * SLOT_SIZE, SLOT_SIZE, SLOT_SIZE);
+                });
+                ctx.strokeStyle = this.isPlayer ? 'rgba(33, 150, 243, 0.8)' : 'rgba(244, 67, 54, 0.8)'; 
+                ctx.lineWidth = 3; 
+                ctx.strokeRect(0, 0, this.w, this.h);
+                ctx.restore();
+
+                if (this.active && this.throttle > 10 && this.compStatus.engine.active) {
+                    let backX = -this.w/2;
+                    let flameL = (this.throttle / 100) * 40 + Math.random()*10;
+                    ctx.fillStyle = '#00e5ff';
+                    ctx.beginPath();
+                    ctx.moveTo(backX, -5); ctx.lineTo(backX - flameL, 0); ctx.lineTo(backX, 5);
+                    ctx.fill();
+                }
+
+                ctx.save();
+                let tyLocal = this.localTurretY + this.h/2; 
+                ctx.translate(this.localTurretX, tyLocal);
+                ctx.rotate(this.turretAngle - this.pitch);
+                ctx.fillStyle = '#222';
+                let bl = this.turretData.length;
+                let bw = this.turretData.width;
+                ctx.fillRect(0, -bw/2, bl, bw);
+                ctx.fillStyle = this.turretData.color;
+                ctx.beginPath(); ctx.arc(0, 0, bw*1.2 + 5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.restore();
+
+                ctx.restore();
+                
+                if (this.hp < this.maxHp && !this.isPlayer) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.fillRect(this.x - 25, this.y - this.h - 20, 50, 6);
+                    ctx.fillStyle = '#f44336';
+                    ctx.fillRect(this.x - 25, this.y - this.h - 20, 50 * (this.hp/this.maxHp), 6);
+                }
+            }
+        }
+
+        function initBuilder() {
+            populateComponentList('turret');
+            updateBuilderStatus();
+            drawPreview();
+        }
+
+        function populateComponentList(category) {
+            builderSelection.category = category;
+            const list = document.getElementById('component-list');
+            list.innerHTML = '';
+            
+            let tabs = document.createElement('div');
+            tabs.style.display = 'flex'; tabs.style.gap = '5px'; tabs.style.marginBottom = '10px';
+            tabs.innerHTML = `
+                <button onclick="populateComponentList('turret')" style="padding:5px; flex:1; ${category==='turret'?'background:#4CAF50':''}">Weapons</button>
+                <button onclick="populateComponentList('component')" style="padding:5px; flex:1; ${category==='component'?'background:#4CAF50':''}">Internals</button>
+            `;
+            list.appendChild(tabs);
+
+            let data = [];
+            if (category === 'turret') {
+                data = TURRETS.filter(t => playerBlueprint.vehicleType === 'plane' ? t.isAero : !t.isAero);
+            } else {
+                data = Object.values(COMPONENT_TYPES).filter(c => {
+                    if (playerBlueprint.vehicleType === 'plane') return c.type === 'none' || c.id === 5 || c.id === 2 || c.id === 3 || c.id === 6; 
+                    else return c.type === 'none' || c.id === 1 || c.id === 2 || c.id === 3 || c.id === 4;
+                });
+            }
+            
+            data.forEach(item => {
+                let div = document.createElement('div');
+                div.className = `part-item ${builderSelection.itemIdx === item.id ? 'selected' : ''}`;
+                div.innerHTML = `<span>${item.name}</span> <span style="display:inline-block; width:15px; height:15px; background:${item.color}; border:1px solid #fff;"></span>`;
+                div.onclick = () => {
+                    builderSelection.itemIdx = item.id;
+                    document.getElementById('comp-desc').innerText = category === 'turret' 
+                        ? `RLD: ${item.reload}s | AP Dmg: ${item.ap.dmg} | HE Dmg: ${item.he.dmg}` 
+                        : item.desc;
+                    populateComponentList(category);
+                };
+                list.appendChild(div);
+            });
+            
+            if(data.length > 0 && !data.find(d=>d.id === builderSelection.itemIdx)) {
+                builderSelection.itemIdx = data[0].id;
+                document.getElementById('comp-desc').innerText = data[0].desc || '';
+            }
+        }
+
+        function clearChassis() {
+            playerBlueprint.grid = Array(CHASSIS_ROWS).fill(null).map(() => Array(CHASSIS_COLS).fill(COMPONENT_TYPES.NONE));
+            playerBlueprint.turretPos = null;
+            updateBuilderStatus();
+            drawPreview();
+        }
+
+        function updateBuilderStatus() {
+            let hasEngine = false, hasFuel = false, hasAmmo = false;
+            playerBlueprint.grid.forEach(row => row.forEach(c => {
+                if(c.type === 'engine') hasEngine = true;
+                if(c.type === 'fuel') hasFuel = true;
+                if(c.type === 'ammo') hasAmmo = true;
+            }));
+            let hasTurret = playerBlueprint.turretIdx !== -1;
+
+            const setReq = (id, valid) => {
+                let el = document.getElementById(id);
+                if(valid) el.classList.add('ok'); else el.classList.remove('ok');
+            };
+            setReq('req-turret', hasTurret);
+            setReq('req-engine', hasEngine);
+            setReq('req-fuel', hasFuel);
+            setReq('req-ammo', hasAmmo);
+
+            document.getElementById('btn-start').disabled = !(hasTurret && hasEngine && hasFuel && hasAmmo);
+        }
+
+        function drawPreview() {
+            pCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+            
+            // Draw Grid Background
+            pCtx.fillStyle = '#1e1e1e';
+            pCtx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+
+            // Draw Grid Cells and Placed Components
+            pCtx.lineWidth = 1;
+            pCtx.strokeStyle = 'rgba(255,255,255,0.1)';
+            for(let r=0; r<CHASSIS_ROWS; r++) {
+                for(let c=0; c<CHASSIS_COLS; c++) {
+                    let rx = c * SLOT_SIZE;
+                    let ry = r * SLOT_SIZE;
+                    pCtx.strokeRect(rx, ry, SLOT_SIZE, SLOT_SIZE);
+                    
+                    let comp = playerBlueprint.grid[r][c];
+                    if(comp.type !== 'none') {
+                        pCtx.fillStyle = comp.color;
+                        pCtx.fillRect(rx+1, ry+1, SLOT_SIZE-2, SLOT_SIZE-2);
+                        pCtx.fillStyle = '#fff'; pCtx.font = '10px Arial'; pCtx.textAlign='center';
+                        pCtx.fillText(comp.name.charAt(0), rx + SLOT_SIZE/2, ry + SLOT_SIZE/2 + 3);
+                    }
+                }
+            }
+
+            // Draw selected turret dynamically positioned above top-center of placed blocks
+            let tIdx = builderSelection.category === 'turret' ? builderSelection.itemIdx : playerBlueprint.turretIdx;
+            if (tIdx !== -1) {
+                let tx, ty;
+                
+                if (builderSelection.category === 'turret' && isPreviewHovering) {
+                    // Hover follow snapping
+                    let col = Math.floor(previewHoverX / SLOT_SIZE);
+                    let row = Math.floor(previewHoverY / SLOT_SIZE);
+                    tx = col * SLOT_SIZE + SLOT_SIZE/2;
+                    ty = row * SLOT_SIZE + SLOT_SIZE/2;
+                    pCtx.globalAlpha = 0.6;
+                } else if (playerBlueprint.turretPos) {
+                    tx = playerBlueprint.turretPos.c * SLOT_SIZE + SLOT_SIZE/2;
+                    ty = playerBlueprint.turretPos.r * SLOT_SIZE + SLOT_SIZE/2;
+                    pCtx.globalAlpha = 1.0;
+                } else {
+                    // Center fallback
+                    tx = previewCanvas.width / 2;
+                    ty = previewCanvas.height / 2;
+                    pCtx.globalAlpha = 0.4;
+                }
+
+                let tData = TURRETS[tIdx];
+                pCtx.save();
+                pCtx.translate(tx, ty);
+                pCtx.globalAlpha = builderSelection.category === 'turret' && playerBlueprint.turretIdx === -1 ? 0.5 : 1.0;
+                
+                pCtx.fillStyle = '#222';
+                pCtx.fillRect(0, -tData.width/2, tData.length, tData.width);
+                pCtx.fillStyle = tData.color;
+                
+                if (tData.isGiant) {
+                    pCtx.fillRect(-tData.width, -tData.width, tData.width*2, tData.width*2);
+                    pCtx.strokeRect(-tData.width, -tData.width, tData.width*2, tData.width*2);
+                } else {
+                    pCtx.beginPath(); pCtx.arc(0, 0, tData.width*1.2 + 5, 0, Math.PI*2); pCtx.fill(); pCtx.stroke();
+                }
+                pCtx.restore();
+                pCtx.globalAlpha = 1.0; // Reset for other drawings
+            }
+        }
+
+        function generateAITank(x, y, isPlane = false) {
+            let bp = {
+                vehicleType: isPlane ? 'plane' : 'tank',
+                turretIdx: 0,
+                grid: Array(CHASSIS_ROWS).fill(null).map(() => Array(CHASSIS_COLS).fill(COMPONENT_TYPES.NONE))
+            };
+            
+            let tList = TURRETS.filter(t => isPlane ? t.isAero : !t.isAero);
+            bp.turretIdx = tList[Math.floor(Math.random() * tList.length)].id;
+
+            let gw = 4 + Math.floor(Math.random() * 5); 
+            let gh = 2 + Math.floor(Math.random() * 3); 
+            let startR = CHASSIS_ROWS - gh; 
+            let startC = Math.floor((CHASSIS_COLS - gw) / 2);
+            
+            let emptySlots = [];
+            for(let r=startR; r<startR+gh; r++) {
+                for(let c=startC; c<startC+gw; c++) {
+                    emptySlots.push({r,c});
+                }
+            }
+            
+            if(Math.random() > 0.5) emptySlots = emptySlots.filter(s => !(s.r === startR && s.c === startC));
+            if(Math.random() > 0.5) emptySlots = emptySlots.filter(s => !(s.r === startR && s.c === startC + gw - 1));
+
+            for (let i = emptySlots.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [emptySlots[i], emptySlots[j]] = [emptySlots[j], emptySlots[i]];
+            }
+
+            bp.grid[emptySlots[0].r][emptySlots[0].c] = isPlane ? COMPONENT_TYPES.AERO_ENGINE : COMPONENT_TYPES.ENGINE;
+            bp.grid[emptySlots[1].r][emptySlots[1].c] = COMPONENT_TYPES.FUEL;
+            bp.grid[emptySlots[2].r][emptySlots[2].c] = COMPONENT_TYPES.AMMO;
+            
+            for(let i=3; i<emptySlots.length; i++) {
+                bp.grid[emptySlots[i].r][emptySlots[i].c] = isPlane ? COMPONENT_TYPES.WING : COMPONENT_TYPES.ARMOR;
+            }
+            
+            bp.turretPos = { r: startR - 1, c: startC + Math.floor(gw/2) };
+
+            return isPlane ? new Airplane(x, bp, false) : new Tank(x, bp, false);
+        }
+
+        function startGame() {
+            generateTerrain();
+            entities = []; projectiles = []; particles = [];
+            
+            playerVehicle = playerBlueprint.vehicleType === 'plane' ? new Airplane(300, playerBlueprint, true) : new Tank(300, playerBlueprint, true);
+            entities.push(playerVehicle);
+            
+            for(let i=0; i<4; i++) {
+                let startX = WORLD_WIDTH - 600 - (i * 900);
+                let spawnPlane = Math.random() > 0.6;
+                entities.push(generateAITank(startX, 0, spawnPlane));
+            }
+
+            setGameState('PLAYING');
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function setGameState(state) {
+            gameState = state;
+            document.getElementById('builder-menu').style.display = state === 'BUILDER' ? 'flex' : 'none';
+            document.getElementById('hud').style.display = state === 'PLAYING' ? 'flex' : 'none';
+            document.getElementById('game-over').style.display = state === 'GAMEOVER' ? 'flex' : 'none';
+            document.getElementById('victory').style.display = state === 'VICTORY' ? 'flex' : 'none';
+        }
+
+        function resetToBuilder() {
+            setGameState('BUILDER');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function checkVictory() {
+            if(gameState !== 'PLAYING') return;
+            let enemiesAlive = entities.some(e => !e.isPlayer && e.active);
+            if (!enemiesAlive) setTimeout(() => setGameState('VICTORY'), 2000);
+        }
+
+        function updateHUDHealth() {
+            if(!playerVehicle) return;
+            let hpPct = Math.max(0, playerVehicle.hp / playerVehicle.maxHp) * 100;
+            document.getElementById('health-bar').style.width = `${hpPct}%`;
+            document.getElementById('health-bar').style.backgroundColor = hpPct > 50 ? '#4CAF50' : (hpPct > 25 ? '#FF9800' : '#f44336');
+
+            let s = playerVehicle.compStatus;
+            const updateIcon = (id, exists, active) => {
+                let el = document.getElementById(id);
+                el.style.display = exists ? 'block' : 'none';
+                if(exists) {
+                    el.className = `comp-icon ${active ? 'active' : 'destroyed'}`;
+                }
+            };
+            updateIcon('icon-engine', s.engine.present, s.engine.active);
+            updateIcon('icon-fuel', s.fuel.present, s.fuel.active);
+            updateIcon('icon-ammo', s.ammo.present, s.ammo.active);
+            
+            if (playerBlueprint.vehicleType === 'plane') {
+                document.getElementById('row-throttle').style.display = 'flex';
+                document.getElementById('throttle-bar').style.width = `${playerVehicle.throttle}%`;
+            } else {
+                document.getElementById('row-throttle').style.display = 'none';
+            }
+        }
+
+        function updateHUDAmmo() {
+            if(!playerVehicle) return;
+            let t = playerVehicle.ammoSelection;
+            let str = t === 'ap' ? `Armor Piercing` : `High Explosive`;
+            let color = t === 'ap' ? '#4CAF50' : '#FF9800';
+            document.getElementById('ammo-type').innerHTML = `<span style="color: ${color}">${str}</span>`;
+        }
+
+        function updateHUDReload() {
+            if(!playerVehicle) return;
+            let rPct = 100;
+            if(playerVehicle.reloadTimer > 0) {
+                rPct = 100 - (playerVehicle.reloadTimer / playerVehicle.turretData.reload) * 100;
+            }
+            document.getElementById('reload-bar').style.width = `${rPct}%`;
+        }
+
+        function gameLoop(timestamp) {
+            if (gameState !== 'PLAYING' && gameState !== 'GAMEOVER' && gameState !== 'VICTORY') return;
+
+            let dt = (timestamp - lastTime) / 1000;
+            if (dt > 0.1) dt = 0.1; // Clamp delta time
+            lastTime = timestamp;
+
+            // Calculate world mouse coordinates based on camera *before* updating tanks
+            mouse.worldX = (mouse.x - canvas.width / 2) / camera.zoom + camera.x;
+            mouse.worldY = (mouse.y - canvas.height / 2) / camera.zoom + camera.y;
+
+            // Update Logic
+            for (let e of entities) e.update(dt);
+            for (let p of projectiles) p.update(dt);
+            for (let p of particles) p.update(dt);
+
+            projectiles = projectiles.filter(p => p.active);
+            particles = particles.filter(p => p.life > 0);
+
+            // Camera follow logic
+            if (playerVehicle) {
+                let targetCamX = playerVehicle.x;
+                let targetCamY = playerVehicle.y - 150; 
+                
+                let halfW = (canvas.width/2)/camera.zoom;
+                let halfH = (canvas.height/2)/camera.zoom;
+                targetCamX = clamp(targetCamX, halfW, WORLD_WIDTH - halfW);
+                targetCamY = clamp(targetCamY, halfH, WORLD_HEIGHT - halfH);
+
+                camera.x = lerp(camera.x, targetCamX, dt * 5);
+                camera.y = lerp(camera.y, targetCamY, dt * 5);
+            }
+
+            if(gameState === 'PLAYING') {
+                updateHUDReload();
+                updateHUDHealth(); // Frequent updates for fire damage
+            }
+
+            // Rendering
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Sky
+            let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, COLORS.sky); grad.addColorStop(1, '#6b9c7b');
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            // Center camera
+            ctx.translate(canvas.width/2, canvas.height/2);
+            ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(-camera.x, -camera.y);
+
+            // Draw BG Mountains
+            ctx.fillStyle = '#2c4228';
+            ctx.beginPath();
+            ctx.moveTo(camera.x - canvas.width, WORLD_HEIGHT);
+            for(let x = camera.x - canvas.width; x < camera.x + canvas.width; x+=100) {
+                 ctx.lineTo(x, WORLD_HEIGHT - 400 - Math.sin(x*0.002)*150);
+            }
+            ctx.lineTo(camera.x + canvas.width, WORLD_HEIGHT);
+            ctx.fill();
+
+            // Draw Destructible Terrain
+            ctx.fillStyle = COLORS.dirt;
+            ctx.beginPath();
+            
+            // Optimization: draw only visible segment
+            let startX = Math.max(0, camera.x - canvas.width/(2*camera.zoom) - TILE_SIZE*2);
+            let endX = Math.min(WORLD_WIDTH, camera.x + canvas.width/(2*camera.zoom) + TILE_SIZE*2);
+            
+            ctx.moveTo(startX, WORLD_HEIGHT);
+            for (let x = startX; x <= endX; x += TILE_SIZE) {
+                ctx.lineTo(x, getTerrainHeight(x));
+            }
+            if(endX < WORLD_WIDTH) ctx.lineTo(endX, getTerrainHeight(endX));
+            ctx.lineTo(endX, WORLD_HEIGHT);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Surface line
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = COLORS.grass;
+            ctx.stroke();
+
+            // Draw Game Objects
+            for (let e of entities) if (!e.active) e.draw(ctx); // Wrecks
+            for (let e of entities) if (e.active) e.draw(ctx);  // Alive
+            for (let p of projectiles) p.draw(ctx);
+            for (let p of particles) p.draw(ctx);
+
+            ctx.restore();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize Builder immediately
+        initBuilder();
+
+    </script>
+</body>
+</html>
